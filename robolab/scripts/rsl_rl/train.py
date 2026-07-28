@@ -103,7 +103,11 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
         f"Installing the correct version..."
     )
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-deps", f"rsl-rl-lib=={RSL_RL_VERSION}"])
+    subprocess.check_call([
+        sys.executable, "-m", "pip", "install", "--no-deps",
+        f"rsl-rl-lib=={RSL_RL_VERSION}",
+        "tensordict", "orjson", "pyvers", "importlib_metadata",
+    ])
     import importlib
     importlib.reload(metadata)
     installed_version = metadata.version("rsl-rl-lib")

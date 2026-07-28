@@ -98,16 +98,16 @@ from packaging import version
 RSL_RL_VERSION = "3.0.1"
 installed_version = metadata.version("rsl-rl-lib")
 if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
-    if platform.system() == "Windows":
-        cmd = [r".\isaaclab.bat", "-p", "-m", "pip", "install", f"rsl-rl-lib=={RSL_RL_VERSION}"]
-    else:
-        cmd = ["./isaaclab.sh", "-p", "-m", "pip", "install", f"rsl-rl-lib=={RSL_RL_VERSION}"]
     print(
-        f"Please install the correct version of RSL-RL.\nExisting version is: '{installed_version}'"
-        f" and required version is: '{RSL_RL_VERSION}'.\nTo install the correct version, run:"
-        f"\n\n\t{' '.join(cmd)}\n"
+        f"[INFO] RSL-RL version '{installed_version}' is lower than required '{RSL_RL_VERSION}'. "
+        f"Installing the correct version..."
     )
-    exit(1)
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", f"rsl-rl-lib=={RSL_RL_VERSION}"])
+    import importlib
+    importlib.reload(metadata)
+    installed_version = metadata.version("rsl-rl-lib")
+    print(f"[INFO] RSL-RL updated to version '{installed_version}'.")
 
 """Rest everything follows."""
 

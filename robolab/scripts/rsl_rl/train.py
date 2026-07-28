@@ -119,8 +119,11 @@ try:
 except ImportError:
     print("[INFO] tensordict not found, installing...")
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "tensordict"])
-    print("[INFO] tensordict installed.")
+    # install to the same site-packages as rsl_rl to ensure Isaac Sim can find it
+    import rsl_rl
+    _site_packages = os.path.dirname(os.path.dirname(rsl_rl.__file__))
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "tensordict", "--target", _site_packages])
+    print(f"[INFO] tensordict installed to {_site_packages}.")
 
 """Rest everything follows."""
 

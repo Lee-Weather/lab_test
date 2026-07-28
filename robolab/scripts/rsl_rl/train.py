@@ -113,6 +113,15 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
     installed_version = metadata.version("rsl-rl-lib")
     print(f"[INFO] RSL-RL updated to version '{installed_version}'.")
 
+# ensure tensordict is available (required by rsl-rl-lib 3.x)
+try:
+    import tensordict  # noqa: F401
+except ImportError:
+    print("[INFO] tensordict not found, installing...")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "tensordict"])
+    print("[INFO] tensordict installed.")
+
 """Rest everything follows."""
 
 import logging

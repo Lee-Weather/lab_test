@@ -94,8 +94,9 @@ import platform
 
 from packaging import version
 
-# check minimum supported rsl-rl version
-RSL_RL_VERSION = "3.0.1"
+# use pre-installed rsl-rl version (2.3.3) for Isaac Lab 2.2.0 compatibility
+# rsl-rl 3.x requires dict observations which RslRlVecEnvWrapper in Isaac Lab 2.2.0 does not provide
+RSL_RL_VERSION = "2.3.3"
 installed_version = metadata.version("rsl-rl-lib")
 if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
     print(
@@ -120,39 +121,40 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
     installed_version = metadata.version("rsl-rl-lib")
     print(f"[INFO] RSL-RL updated to version '{installed_version}'.")
 
-# ensure tensordict is available (required by rsl-rl-lib 3.x)
-try:
-    import tensordict  # noqa: F401
-except ImportError:
-    print("[INFO] tensordict not found, installing...")
-    import subprocess
-    for _ in range(3):
-        try:
-            subprocess.check_call([
-                sys.executable, "-m", "pip", "install", "--no-deps", "--upgrade", "--timeout", "300",
-                "tensordict", "orjson", "pyvers", "importlib_metadata",
-            ])
-            break
-        except subprocess.CalledProcessError:
-            print(f"[INFO] Retry installing tensordict (attempt {_ + 2}/3)...")
-    else:
-        raise RuntimeError("Failed to install tensordict after 3 attempts")
-    # find where tensordict was actually installed and add to sys.path
-    result = subprocess.run(
-        [sys.executable, "-m", "pip", "show", "tensordict"],
-        capture_output=True, text=True
-    )
-    for line in result.stdout.splitlines():
-        if line.startswith("Location:"):
-            _loc = line.split(":", 1)[1].strip()
-            if _loc not in sys.path:
-                sys.path.insert(0, _loc)
-            print(f"[INFO] tensordict location: {_loc}")
-            break
-    import importlib
-    importlib.invalidate_caches()
-    import tensordict  # noqa: F401
-    print("[INFO] tensordict installed and verified.")
+# ensure tensordict is available (required by rsl-rl-lib 3.x only)
+if version.parse(installed_version) >= version.parse("3.0.0"):
+    try:
+        import tensordict  # noqa: F401
+    except ImportError:
+        print("[INFO] tensordict not found, installing...")
+        import subprocess
+        for _ in range(3):
+            try:
+                subprocess.check_call([
+                    sys.executable, "-m", "pip", "install", "--no-deps", "--upgrade", "--timeout", "300",
+                    "tensordict", "orjson", "pyvers", "importlib_metadata",
+                ])
+                break
+            except subprocess.CalledProcessError:
+                print(f"[INFO] Retry installing tensordict (attempt {_ + 2}/3)...")
+        else:
+            raise RuntimeError("Failed to install tensordict after 3 attempts")
+        # find where tensordict was actually installed and add to sys.path
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "show", "tensordict"],
+            capture_output=True, text=True
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("Location:"):
+                _loc = line.split(":", 1)[1].strip()
+                if _loc not in sys.path:
+                    sys.path.insert(0, _loc)
+                print(f"[INFO] tensordict location: {_loc}")
+                break
+        import importlib
+        importlib.invalidate_caches()
+        import tensordict  # noqa: F401
+        print("[INFO] tensordict installed and verified.")
 
 """Rest everything follows."""
 
@@ -396,8 +398,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # create runner from rsl-rl
     agent_cfg_dict = agent_cfg.to_dict()
     # rsl-rl-lib 3.0.1+ expects obs_groups, add default if missing (IsaacLab < 2.3 compat)
-    if "obs_groups" not in agent_cfg_dict:
-        agent_cfg_dict["obs_groups"] = {"policy": ["policy"], "critic": ["critic"]}
+    # only add for rsl-rl 3.x; 2.x uses tuple observations and does not need obs_groups
+    if version.parse(installed_version) >= version.parse("3.0.0"):
+        if "obs_groups" not in agent_cfg_dict:
+            agent_cfg_dict["obs_groups"] = {"policy": ["policy"], "critic": ["critic"]}
     runner_class_name = getattr(agent_cfg, "class_name", "OnPolicyRunner")
     if runner_class_name == "OnPolicyRunner":
         runner = OnPolicyRunner(env, agent_cfg_dict, log_dir=log_dir, device=agent_cfg.device)

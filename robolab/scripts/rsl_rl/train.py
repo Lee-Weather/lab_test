@@ -188,6 +188,9 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-deps", "-e", _robolab_path])
     import importlib
     importlib.invalidate_caches()
+    # also add source dir to sys.path in case pip installed to wrong location
+    if _robolab_path not in sys.path:
+        sys.path.insert(0, _robolab_path)
     import robolab.tasks  # noqa: F401
     print("[INFO] robolab installed and verified.")
 # PLACEHOLDER: Extension template (do not remove this comment)

@@ -318,7 +318,7 @@ class BaseAgentCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 500
     experiment_name = ""
     run_name = ""
-    logger = "wandb"
+    logger = "tensorboard"
     neptune_project = "robolab"
     wandb_project = "robolab"
     resume = False

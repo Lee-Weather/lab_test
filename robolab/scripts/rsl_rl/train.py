@@ -149,7 +149,11 @@ from datetime import datetime
 import torch
 import gymnasium as gym
 
-from rsl_rl.runners import DistillationRunner, OnPolicyRunner, AMPRunner
+from rsl_rl.runners import DistillationRunner, OnPolicyRunner
+try:
+    from rsl_rl.runners import AMPRunner
+except ImportError:
+    AMPRunner = None
 
 from isaaclab.envs import (
     DirectMARLEnv,

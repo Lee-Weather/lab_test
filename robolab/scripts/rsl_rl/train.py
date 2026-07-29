@@ -177,7 +177,19 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 
 logger = logging.getLogger(__name__)
 
-import robolab.tasks
+# install robolab package from repo if not available
+try:
+    import robolab.tasks  # noqa: F401
+except ImportError:
+    print("[INFO] robolab not found, installing from repo...")
+    import subprocess
+    _repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    _robolab_path = os.path.join(_repo_root, "robolab")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-deps", "-e", _robolab_path])
+    import importlib
+    importlib.invalidate_caches()
+    import robolab.tasks  # noqa: F401
+    print("[INFO] robolab installed and verified.")
 # PLACEHOLDER: Extension template (do not remove this comment)
 
 torch.backends.cuda.matmul.allow_tf32 = True

@@ -103,11 +103,18 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
         f"Installing the correct version..."
     )
     import subprocess
-    subprocess.check_call([
-        sys.executable, "-m", "pip", "install", "--no-deps",
-        f"rsl-rl-lib=={RSL_RL_VERSION}",
-        "tensordict", "orjson", "pyvers", "importlib_metadata",
-    ])
+    for _ in range(3):
+        try:
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", "--no-deps", "--timeout", "300",
+                f"rsl-rl-lib=={RSL_RL_VERSION}",
+                "tensordict", "orjson", "pyvers", "importlib_metadata",
+            ])
+            break
+        except subprocess.CalledProcessError:
+            print(f"[INFO] Retry installing rsl-rl-lib (attempt {_ + 2}/3)...")
+    else:
+        raise RuntimeError("Failed to install rsl-rl-lib after 3 attempts")
     import importlib
     importlib.reload(metadata)
     installed_version = metadata.version("rsl-rl-lib")
@@ -119,10 +126,17 @@ try:
 except ImportError:
     print("[INFO] tensordict not found, installing...")
     import subprocess
-    subprocess.check_call([
-        sys.executable, "-m", "pip", "install", "--no-deps", "--upgrade",
-        "tensordict", "orjson", "pyvers", "importlib_metadata",
-    ])
+    for _ in range(3):
+        try:
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", "--no-deps", "--upgrade", "--timeout", "300",
+                "tensordict", "orjson", "pyvers", "importlib_metadata",
+            ])
+            break
+        except subprocess.CalledProcessError:
+            print(f"[INFO] Retry installing tensordict (attempt {_ + 2}/3)...")
+    else:
+        raise RuntimeError("Failed to install tensordict after 3 attempts")
     # find where tensordict was actually installed and add to sys.path
     result = subprocess.run(
         [sys.executable, "-m", "pip", "show", "tensordict"],
@@ -185,7 +199,7 @@ except ImportError:
     import subprocess
     _repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     _robolab_path = os.path.join(_repo_root, "robolab")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-deps", "-e", _robolab_path])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-deps", "--no-build-isolation", "--timeout", "300", "-e", _robolab_path])
     import importlib
     importlib.invalidate_caches()
     # also add source dir to sys.path in case pip installed to wrong location

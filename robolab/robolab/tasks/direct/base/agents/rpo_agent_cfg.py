@@ -160,8 +160,8 @@ def data_augmentation_func(env, obs, actions):
 class RPOFlatAgentCfg(BaseAgentCfg):
     def __post_init__(self):
         super().__post_init__()
-        self.experiment_name: str = "rpo_flat"
-        self.wandb_project: str = "rpo_flat"
+        self.experiment_name: str = "x1_29_flat"
+        self.wandb_project: str = "x1_29_flat"
         self.seed = 42
         self.num_steps_per_env = 24
         self.max_iterations = 3001

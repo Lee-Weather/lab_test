@@ -98,7 +98,7 @@ class SceneCfg(InteractiveSceneCfg):
             offset=RayCasterCfg.OffsetCfg(pos=(0.025, 0.0, 20.0)),
             ray_alignment='yaw',
             pattern_cfg=patterns.GridPatternCfg(resolution=0.01, size=[0.12, 0.04]),
-            debug_vis=True,
+            debug_vis=False,
             mesh_prim_paths=["/World/ground"],
             update_period=step_dt,
         )
@@ -107,7 +107,7 @@ class SceneCfg(InteractiveSceneCfg):
             offset=RayCasterCfg.OffsetCfg(pos=(0.025, 0.0, 20.0)),
             ray_alignment='yaw',
             pattern_cfg=patterns.GridPatternCfg(resolution=0.01, size=[0.12, 0.04]),
-            debug_vis=True,
+            debug_vis=False,
             mesh_prim_paths=["/World/ground"],
             update_period=step_dt,
         )

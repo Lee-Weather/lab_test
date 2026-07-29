@@ -34,3 +34,5 @@ import os
 # Conveniences to other module directories via relative paths
 ISAAC_ASSET_DIR = os.path.abspath(os.path.dirname(__file__))
 ISAAC_DATA_DIR = os.path.join(os.path.join(os.path.dirname(__file__), "../../data"))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+CZY_DATA_DIR = os.path.join(PROJECT_ROOT, "czy/data")

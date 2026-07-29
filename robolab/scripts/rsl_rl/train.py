@@ -123,10 +123,13 @@ except ImportError:
     import rsl_rl
     _site_packages = os.path.dirname(os.path.dirname(rsl_rl.__file__))
     subprocess.check_call([
-        sys.executable, "-m", "pip", "install", "--no-deps",
+        sys.executable, "-m", "pip", "install", "--no-deps", "--upgrade",
         "tensordict", "orjson", "pyvers", "importlib_metadata",
         "--target", _site_packages,
     ])
+    # ensure the target path is in sys.path
+    if _site_packages not in sys.path:
+        sys.path.insert(0, _site_packages)
     print(f"[INFO] tensordict installed to {_site_packages}.")
 
 """Rest everything follows."""

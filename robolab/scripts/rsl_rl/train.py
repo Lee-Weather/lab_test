@@ -380,14 +380,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl
-    if agent_cfg.class_name == "OnPolicyRunner":
+    runner_class_name = getattr(agent_cfg, "class_name", "OnPolicyRunner")
+    if runner_class_name == "OnPolicyRunner":
         runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
-    elif agent_cfg.class_name == "DistillationRunner":
+    elif runner_class_name == "DistillationRunner":
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
-    elif agent_cfg.class_name == "AMPRunner":
+    elif runner_class_name == "AMPRunner":
         runner = AMPRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
     else:
-        raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
+        raise ValueError(f"Unsupported runner class: {runner_class_name}")
     # write git state to logs
     runner.add_git_repo_to_log(__file__)
     # load the checkpoint

@@ -127,7 +127,7 @@ class CommandsCfg:
     rel_heading_envs: float = 1.0
     heading_command: bool = True
     heading_control_stiffness: float = 0.5
-    debug_vis: bool = True
+    debug_vis: bool = False
     ranges: CommandRangesCfg = CommandRangesCfg()
 
 

@@ -383,7 +383,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     agent_cfg_dict = agent_cfg.to_dict()
     # rsl-rl-lib 3.0.1+ expects obs_groups, add default if missing (IsaacLab < 2.3 compat)
     if "obs_groups" not in agent_cfg_dict:
-        agent_cfg_dict["obs_groups"] = {}
+        agent_cfg_dict["obs_groups"] = {"policy": ["policy"], "critic": ["critic"]}
     runner_class_name = getattr(agent_cfg, "class_name", "OnPolicyRunner")
     if runner_class_name == "OnPolicyRunner":
         runner = OnPolicyRunner(env, agent_cfg_dict, log_dir=log_dir, device=agent_cfg.device)

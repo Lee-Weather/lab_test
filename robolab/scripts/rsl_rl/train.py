@@ -380,13 +380,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl
+    agent_cfg_dict = agent_cfg.to_dict()
+    # rsl-rl-lib 3.0.1+ expects obs_groups, add default if missing (IsaacLab < 2.3 compat)
+    if "obs_groups" not in agent_cfg_dict:
+        agent_cfg_dict["obs_groups"] = {}
     runner_class_name = getattr(agent_cfg, "class_name", "OnPolicyRunner")
     if runner_class_name == "OnPolicyRunner":
-        runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+        runner = OnPolicyRunner(env, agent_cfg_dict, log_dir=log_dir, device=agent_cfg.device)
     elif runner_class_name == "DistillationRunner":
-        runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+        runner = DistillationRunner(env, agent_cfg_dict, log_dir=log_dir, device=agent_cfg.device)
     elif runner_class_name == "AMPRunner":
-        runner = AMPRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+        runner = AMPRunner(env, agent_cfg_dict, log_dir=log_dir, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {runner_class_name}")
     # write git state to logs

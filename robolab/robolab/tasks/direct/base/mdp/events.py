@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 def randomize_rigid_body_com(
     env: BaseEnv,
+    env_ids: torch.Tensor | None,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     com_range: dict | None = None,
 ):
@@ -26,9 +27,13 @@ def randomize_rigid_body_com(
 
     Args:
         env: The environment instance.
+        env_ids: The environment indices. If None, all environments are considered.
         asset_cfg: The asset configuration specifying the robot and body names.
         com_range: Dictionary with keys 'x', 'y', 'z' and (min, max) tuple values.
     """
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device=env.device)
+
     if com_range is None:
         com_range = {"x": (-0.025, 0.025), "y": (-0.025, 0.025), "z": (-0.05, 0.05)}
 
@@ -39,7 +44,7 @@ def randomize_rigid_body_com(
         body_ids = list(range(asset.num_bodies))
 
     num_bodies = len(body_ids)
-    num_envs = env.num_envs
+    num_envs = len(env_ids)
 
     # Generate random COM offsets
     com_offsets = torch.zeros(num_envs, num_bodies, 3, device=env.device)

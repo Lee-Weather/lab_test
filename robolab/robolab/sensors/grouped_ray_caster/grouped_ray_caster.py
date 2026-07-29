@@ -10,7 +10,10 @@ import re
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
-from isaaclab.sensors.ray_caster import MultiMeshRayCaster
+try:
+    from isaaclab.sensors.ray_caster import MultiMeshRayCaster
+except ImportError:
+    from isaaclab.sensors.ray_caster import RayCaster as MultiMeshRayCaster
 from isaaclab.sensors.ray_caster.ray_cast_utils import obtain_world_pose_from_view
 from isaaclab.sim.views import XformPrimView
 

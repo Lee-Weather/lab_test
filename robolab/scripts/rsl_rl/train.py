@@ -130,6 +130,11 @@ except ImportError:
     # ensure the target path is in sys.path
     if _site_packages not in sys.path:
         sys.path.insert(0, _site_packages)
+    # clear Python's import cache so newly installed packages are discoverable
+    import importlib
+    importlib.invalidate_caches()
+    # verify tensordict can now be imported
+    import tensordict  # noqa: F401
     print(f"[INFO] tensordict installed to {_site_packages}.")
 
 """Rest everything follows."""

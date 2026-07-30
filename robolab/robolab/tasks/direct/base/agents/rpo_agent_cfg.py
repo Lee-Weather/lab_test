@@ -38,7 +38,10 @@ from isaaclab_rl.rsl_rl import (  # noqa:F401
     RslRlSymmetryCfg,
 )
 import torch
-from tensordict import TensorDict
+try:
+    from tensordict import TensorDict
+except ImportError:
+    TensorDict = None
 from functools import lru_cache
 
 from robolab.tasks.direct.base import (  # noqa:F401

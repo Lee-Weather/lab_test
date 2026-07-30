@@ -94,9 +94,8 @@ import platform
 
 from packaging import version
 
-# use pre-installed rsl-rl version (2.3.3) for Isaac Lab 2.2.0 compatibility
-# rsl-rl 3.x requires dict observations which RslRlVecEnvWrapper in Isaac Lab 2.2.0 does not provide
-RSL_RL_VERSION = "2.3.3"
+# use rsl-rl 3.0.1 for Isaac Lab 2.3.2 (natively supports dict observations)
+RSL_RL_VERSION = "3.0.1"
 installed_version = metadata.version("rsl-rl-lib")
 if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
     print(

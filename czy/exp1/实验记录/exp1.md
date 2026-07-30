@@ -5,6 +5,7 @@
 | 编号 | 日期 | 摘要 | 状态 | Task ID | checkpoint |
 |------|------|------|------|---------|------------|
 | exp0 | 2026-07-29 | RPO-Flat 基线训练，9001轮，训练日志趋势分析 | 训练中 | TASK_20260729_127 | - |
+| exp1 | 2026-07-30 | 3001轮基线训练，max_iterations=3001，确保配置已推送 | 待训练 | - | - |
 
 ---
 
@@ -127,3 +128,94 @@
 - 若 feet_slide 持续恶化，考虑增大 feet_slide 惩罚权重
 - 若 joint_deviation_torso 不收敛，考虑增大 torso 偏移惩罚
 - 下次创建任务前确保本地修改已 commit 并 push 到远程仓库
+
+---
+
+## 实验 exp1：3001轮基线训练
+
+### 1. 上一实验结果与教训
+
+> 数据：exp0 训练日志（截至 iter ~311/9001）
+> - Mean reward: -4.74（iter 311），趋势上升但绝对值远低于目标 25
+> - Mean episode length: 108.7（iter 311），目标 900
+> - termination_penalty: -0.1882，机器人仍频繁摔倒
+> - feet_slide / action_smoothness / joint_deviation_torso 均在恶化
+>
+> **核心教训**：
+> - exp0 因本地修改未推送，实际使用旧配置（max_iterations=9001, save_interval=1000），无法精确评估 3000 轮时的表现
+> - 核心指标（reward、episode length）趋势良好，但距离目标差距巨大
+> - 本轮需确保配置正确推送，用 max_iterations=3001 精确评估 3000 轮训练效果
+
+### 2. 本轮修改目标
+
+- 确保 max_iterations=3001、save_interval=10 的配置正确推送到远程仓库
+- 获取 3000 轮训练的完整结果数据
+- 验收标准：Mean reward ≥ 25，Mean episode length ≥ 900
+- 若不达标，分析原因并为下一轮优化提供方向
+
+### 3. 修改内容
+
+### 修改一：训练轮数和保存间隔
+
+| 参数 | 旧值 | 新值 | 说明 |
+|------|------|------|------|
+| max_iterations | 9001（exp0实际值） | 3001 | 目标评估 3000 轮效果 |
+| save_interval | 1000（exp0实际值） | 10 | 每 10 轮保存 checkpoint，便于精细追踪 |
+
+**理由**：exp0 因配置未推送导致实际训练参数与预期不符。本轮确保配置正确推送，精确评估 3000 轮训练效果。
+
+### 4. 修改文件
+
+- `robolab/robolab/tasks/direct/base/agents/rpo_agent_cfg.py`：max_iterations 301→3001，save_interval 保持 10
+
+### 5. 训练参数
+
+| 参数 | 值 |
+|------|-----|
+| 训练方式 | 从零 |
+| max_iterations | 3001 |
+| save_interval | 10 |
+| num_envs | 8192 |
+| num_steps_per_env | 24 |
+| seed | 42 |
+| learning_rate | 1.0e-3 |
+| schedule | adaptive |
+| gamma | 0.99 |
+| lam | 0.95 |
+| entropy_coef | 0.005 |
+| clip_param | 0.2 |
+| desired_kl | 0.01 |
+| num_learning_epochs | 5 |
+| num_mini_batches | 4 |
+| symmetry_cfg | None（Flat 不启用对称） |
+| clip_actions | 100.0 |
+| 算力 | 1×4090D 24G，ESKU000001 |
+| 镜像 | BJX00000178, V000220 (IsaacSim:5.1 \| IsaacLab:2.3.2) |
+| 代码仓库 | lab_test.git, x1_29 分支 |
+| 启动命令 | `gm-run lab_test/robolab/scripts/rsl_rl/train.py --task=RPO-Flat --headless --logger=tensorboard --num_envs=8192` |
+
+### 6. 预期与验收
+
+**目标指标**（3000 轮时）：
+
+| 指标 | exp0 (iter 311) | exp1 目标 | 异常信号 |
+|------|-----------------|-----------|---------|
+| Mean reward | -4.74 | ≥ 25 | < 10 |
+| Mean episode length | 108.7 | ≥ 900 | < 500 |
+| track_lin_vel_xy_exp | 0.0530 | > 0.5 | < 0.2 |
+| track_ang_vel_z_exp | 0.0374 | > 0.5 | < 0.2 |
+| termination_penalty | -0.1882 | > -0.05 | < -0.10 |
+| action_noise_std | 0.40 | < 0.3 | > 0.5 |
+
+**关注指标**（训练日志趋势）：
+
+| 指标 | 异常信号 |
+|------|---------|
+| Mean reward | 停滞或下降 |
+| Mean episode length | 不增长 |
+| termination_penalty | 持续高位不改善 |
+| feet_slide | 持续恶化 |
+
+### 7. 实验结果
+
+> 待训练完成后补充。

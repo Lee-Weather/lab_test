@@ -191,6 +191,8 @@ class RPOFlatEnvCfg(BaseEnvCfg):
             step_dt = self.decimation * self.sim.dt
         )
         self.robot.terminate_contacts_body_names = ["lumbar_pitch_link", ".*_hip_yaw_link", ".*_hip_roll_link"]
+        self.robot.terminate_base_height = 0.3
+        self.robot.terminate_base_orientation = 0.5
         self.robot.feet_body_names = [".*ankle_roll.*"]
         self.events.add_base_mass.params["asset_cfg"].body_names = ["lumbar_pitch_link"]
         self.events.randomize_rigid_body_com.params["asset_cfg"].body_names = ["lumbar_pitch_link", "base_link"]

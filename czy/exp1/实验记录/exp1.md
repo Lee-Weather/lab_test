@@ -5,7 +5,8 @@
 | 编号 | 日期 | 摘要 | 状态 | Task ID | checkpoint |
 |------|------|------|------|---------|------------|
 | exp0 | 2026-07-29 | RPO-Flat 基线训练，9001轮，训练日志趋势分析 | 训练中 | TASK_20260729_127 | - |
-| exp1 | 2026-07-30 | 3001轮基线训练，max_iterations=3001，确保配置已推送 | 待训练 | - | - |
+| exp1 | 2026-07-30 | 3001轮基线训练，ep_len 948✅，reward 7.26❌（目标25） | 失败 | TASK_20260730_176 | model_3000.pt |
+| exp2 | 2026-07-30 | 奖励权重优化：↑正向(track_vel×2,upward×2,air_time×4)，↓惩罚(torso×0.5,smoothness×0.5) | 待训练 | - | - |
 
 ---
 
@@ -215,6 +216,148 @@
 | Mean episode length | 不增长 |
 | termination_penalty | 持续高位不改善 |
 | feet_slide | 持续恶化 |
+
+### 7. 实验结果
+
+> 训练任务：TASK_20260730_176，2026-07-30 18:17 ~ 20:38（约 2h21m）
+> 最终 checkpoint：model_3000.pt / policy_3000.pt (JIT) / policy_3000.onnx
+
+#### 最终结果（iter 3000）
+
+| 指标 | exp0 (iter 311) | exp1 目标 | exp1 实测 (iter 3000) | 判定 |
+|------|-----------------|-----------|----------------------|------|
+| Mean reward | -4.74 | ≥ 25 | **7.26** | ❌ 未达标 |
+| Mean episode length | 108.7 | ≥ 900 | **948.58** | ✅ 达标 |
+| action_noise_std | 0.40 | < 0.3 | **0.26** | ✅ 达标 |
+
+#### 训练趋势
+
+| iter | Mean reward | Mean episode length |
+|------|-------------|---------------------|
+| 46 | -6.06 | 17.24 |
+| 286 | -4.82 | 53 |
+| 511 | -5.10 | 166 |
+| 831 | -5.40 | 272 |
+| 1261 | -4.30 | 700 |
+| 1901 | +3.58 | 954 |
+| 2541 | +6.30 | 960 |
+| 3000 | +7.26 | 949 |
+
+#### 各奖励项最终值（iter ~2700）
+
+| 奖励项 | 权重 | 最终值 | 说明 |
+|--------|------|--------|------|
+| track_lin_vel_xy_exp | 1.0 | +0.547 | 线速度跟踪，主要正向贡献 |
+| track_ang_vel_z_exp | 1.0 | +0.679 | 角速度跟踪，主要正向贡献 |
+| upward | 0.4 | +0.372 | 直立奖励 |
+| feet_distance | 0.1 | +0.095 | 脚间距 |
+| knee_distance | 0.1 | +0.095 | 膝间距 |
+| feet_height | 0.2 | +0.024 | 抬脚高度 |
+| feet_contact_without_cmd | 0.1 | +0.018 | 零命令时双脚着地 |
+| feet_air_time | 0.25 | +0.003 | 空中时间（几乎为0） |
+| joint_deviation_torso | -1.0 | -0.365 | **最大惩罚项** |
+| action_smoothness_l2 | -2e-2 | -0.193 | 动作平滑度惩罚 |
+| action_rate_l2 | -2e-2 | -0.141 | 动作变化率惩罚 |
+| stand_still | -0.2 | -0.085 | 静止偏差 |
+| termination_penalty | -200 | -0.022 | 终止惩罚（已大幅改善） |
+| joint_deviation_hip | -0.03 | -0.020 | 髋部偏移 |
+| joint_torques_l2 | -1e-5 | -0.020 | 关节力矩 |
+| feet_slide | -0.3 | -0.030 | 脚滑动 |
+| feet_force | -3e-3 | -0.018 | 地面冲击 |
+
+**结论**：❌ 未达标 -- Episode length 超过 900（948.58），但 Mean reward 仅 7.26，远低于目标 25。
+
+**根因分析**：
+1. **正向奖励不足**：速度跟踪（lin_vel 0.55 + ang_vel 0.68 = 1.23）是主要正向贡献，但权重仅为 1.0，贡献量不足以抵消惩罚
+2. **joint_deviation_torso 惩罚过大**（-0.365）：权重 -1.0，是最大惩罚项，严重拖低总奖励
+3. **action_smoothness + action_rate 惩罚累积**（合计 -0.334）：权重 -2e-2，随着 episode 变长累积更多
+4. **feet_air_time 几乎为零**（+0.003）：机器人几乎没有迈步，可能是在原地晃动保持平衡
+5. **训练曲线后半段增长放缓**：iter 1900→3000（1100轮）reward 仅从 3.6 增至 7.3，增速明显放缓
+
+**下一轮方向**：
+- 增大正向奖励权重（track_lin_vel/ang_vel 1.0→2.0，upward 0.4→0.8，feet_air_time 0.25→1.0）
+- 降低 joint_deviation_torso 权重（-1.0→-0.5）
+- 降低 action_smoothness/action_rate 权重（-2e-2→-1e-2）
+- 保持 episode_length_s、终止条件等不变（episode length 已达标）
+
+---
+
+## 实验 exp2：奖励权重优化训练
+
+### 1. 上一实验结果与教训
+
+> 数据：exp1 训练日志（TASK_20260730_176，3001轮完整训练）
+> - Mean reward: 7.26（目标 25），Episode length: 948.58（目标 900 ✅）
+> - 最大正向贡献：track_lin_vel 0.55 + track_ang_vel 0.68 = 1.23（权重仅 1.0）
+> - 最大惩罚：joint_deviation_torso -0.365（权重 -1.0）、action_smoothness -0.193（权重 -2e-2）、action_rate -0.141（权重 -2e-2）
+> - feet_air_time 几乎为 0（+0.003），机器人没有真正迈步
+>
+> **核心教训**：
+> - Episode length 已达标，说明平衡能力足够
+> - Reward 不足的根本原因是正向奖励权重太低、惩罚权重过高
+> - 需要增大任务奖励权重、降低惩罚权重来提升总 reward
+
+### 2. 本轮修改目标
+
+- Mean reward ≥ 25（exp1 为 7.26）
+- Mean episode length ≥ 900（保持）
+- 通过调整奖励权重，使正向奖励贡献增加约 3 倍
+
+### 3. 修改内容
+
+### 修改一：增大正向奖励权重
+
+| 参数 | exp1 值 | exp2 值 | 说明 |
+|------|---------|---------|------|
+| track_lin_vel_xy_exp | 1.0 | **2.0** | 线速度跟踪奖励翻倍 |
+| track_ang_vel_z_exp | 1.0 | **2.0** | 角速度跟踪奖励翻倍 |
+| feet_air_time | 0.25 | **1.0** | 空中时间奖励增至 4 倍，鼓励迈步 |
+| upward | 0.4 | **0.8** | 直立奖励翻倍 |
+
+**理由**：exp1 中正向奖励总计仅 ~1.83，其中速度跟踪占 67%。翻倍速度跟踪权重预计可直接增加 ~1.23 的正向贡献。
+
+### 修改二：降低主要惩罚权重
+
+| 参数 | exp1 值 | exp2 值 | 说明 |
+|------|---------|---------|------|
+| joint_deviation_torso | -1.0 | **-0.5** | 最大惩罚项减半 |
+| action_smoothness_l2 | -2e-2 | **-1e-2** | 动作平滑度惩罚减半 |
+| action_rate_l2 | -2e-2 | **-1e-2** | 动作变化率惩罚减半 |
+
+**理由**：exp1 中这三项惩罚合计 -0.70，减半后预计可减少 ~0.35 的惩罚。
+
+### 4. 修改文件
+
+- `robolab/robolab/tasks/direct/base/rpo_env_cfg.py`：修改 7 个奖励项权重
+
+### 5. 训练参数
+
+| 参数 | 值 |
+|------|-----|
+| 训练方式 | 从零 |
+| max_iterations | 3001 |
+| save_interval | 10 |
+| num_envs | 8192 |
+| seed | 42 |
+| learning_rate | 1.0e-3 |
+| 其他 PPO 参数 | 与 exp1 相同 |
+| 算力 | 1×4090D 24G，ESKU000001 |
+| 镜像 | BJX00000178, V000220 |
+| 代码仓库 | lab_test.git, x1_29 分支 |
+| 启动命令 | `gm-run lab_test/robolab/scripts/rsl_rl/train.py --task=RPO-Flat --headless --logger=tensorboard --num_envs=8192` |
+
+### 6. 预期与验收
+
+**目标指标**（3000 轮时）：
+
+| 指标 | exp1 (iter 3000) | exp2 目标 | 异常信号 |
+|------|------------------|-----------|---------|
+| Mean reward | 7.26 | ≥ 25 | < 15 |
+| Mean episode length | 948.58 | ≥ 900 | < 700 |
+| track_lin_vel_xy_exp | 0.547 | > 1.0 | < 0.5 |
+| track_ang_vel_z_exp | 0.679 | > 1.2 | < 0.6 |
+| joint_deviation_torso | -0.365 | > -0.20 | < -0.30 |
+| action_noise_std | 0.26 | < 0.3 | > 0.5 |
 
 ### 7. 实验结果
 

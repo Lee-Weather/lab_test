@@ -58,16 +58,16 @@ from robolab.tasks.direct.base import (  # noqa:F401
 
 @configclass
 class RPORewardCfg(RewardCfg):
-    track_lin_vel_xy_exp = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.0, params={"std": 0.5})
-    track_ang_vel_z_exp = RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.0, params={"std": 0.5})
+    track_lin_vel_xy_exp = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=2.0, params={"std": 0.5})
+    track_ang_vel_z_exp = RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=2.0, params={"std": 0.5})
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-0.2)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.1)
     energy = RewTerm(func=mdp.energy, weight=-1e-4)
     joint_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-1e-5)
     joint_vel_l2 = RewTerm(func=mdp.joint_vel_l2, weight=-2e-4)
     dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-2e-2)
-    action_smoothness_l2 = RewTerm(func=mdp.action_smoothness_l2, weight=-2e-2)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-1e-2)
+    action_smoothness_l2 = RewTerm(func=mdp.action_smoothness_l2, weight=-1e-2)
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
         weight=-1.0,
@@ -77,7 +77,7 @@ class RPORewardCfg(RewardCfg):
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
     feet_air_time = RewTerm(
         func=mdp.feet_air_time_positive_biped,
-        weight=0.25,
+        weight=1.0,
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*ankle_roll.*"), "threshold": 0.4},
     )
     feet_slide = RewTerm(
@@ -129,7 +129,7 @@ class RPORewardCfg(RewardCfg):
     )
     joint_deviation_torso = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-1.0,
+        weight=-0.5,
         params={
             "asset_cfg": SceneEntityCfg(
                 "robot", joint_names=["lumbar_.*", ".*_shoulder_roll.*", ".*_shoulder_yaw.*", ".*_elbow_pitch.*", ".*_elbow_yaw.*", ".*_wrist.*"]
@@ -156,7 +156,7 @@ class RPORewardCfg(RewardCfg):
         weight=0.1,
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[".*ankle_roll.*"])},
     )
-    upward = RewTerm(func=mdp.upward, weight=0.4)
+    upward = RewTerm(func=mdp.upward, weight=0.8)
     stand_still = RewTerm(func=mdp.stand_still, weight=-0.2, params={"pos_cfg": SceneEntityCfg("robot", joint_names=[".*_shoulder.*", ".*_elbow.*", ".*_wrist.*", "lumbar_.*", ".*_hip.*", ".*_knee.*", ".*_ankle.*"]),
                                                                      "vel_cfg": SceneEntityCfg("robot", joint_names=[".*_shoulder.*", ".*_elbow.*", ".*_wrist.*", "lumbar_.*", ".*_hip.*", ".*_knee.*", ".*_ankle.*"]), 
                                                                      "pos_weight": 1.0, "vel_weight": 0.04})

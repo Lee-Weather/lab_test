@@ -184,7 +184,12 @@ from isaaclab.envs import (
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.io import dump_yaml
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg as RslRlBaseRunnerCfg, RslRlVecEnvWrapper
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg as RslRlBaseRunnerCfg,
+    RslRlVecEnvWrapper,
+    export_policy_as_jit,
+    export_policy_as_onnx,
+)
 try:
     from isaaclab_rl.rsl_rl import handle_deprecated_rsl_rl_cfg
 except ImportError:
@@ -429,6 +434,26 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # run training
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
+
+    # export policy for sim2sim deployment (JIT + ONNX)
+    final_iter = runner.current_learning_iteration
+    try:
+        policy_nn = runner.alg.policy
+    except AttributeError:
+        policy_nn = runner.alg.actor_critic
+    if hasattr(policy_nn, "actor_obs_normalizer"):
+        normalizer = policy_nn.actor_obs_normalizer
+    elif hasattr(policy_nn, "student_obs_normalizer"):
+        normalizer = policy_nn.student_obs_normalizer
+    else:
+        normalizer = None
+    export_model_dir = os.path.join(log_dir, "exported")
+    os.makedirs(export_model_dir, exist_ok=True)
+    export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename=f"policy_{final_iter}.pt")
+    export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename=f"policy_{final_iter}.onnx")
+    print(f"[INFO] Exported sim2sim models to: {export_model_dir}")
+    print(f"[INFO]   - policy_{final_iter}.pt (JIT)")
+    print(f"[INFO]   - policy_{final_iter}.onnx (ONNX)")
 
     # close the simulator
     env.close()

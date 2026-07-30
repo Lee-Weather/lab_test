@@ -165,7 +165,11 @@ from datetime import datetime
 import torch
 import gymnasium as gym
 
-from rsl_rl.runners import DistillationRunner, OnPolicyRunner
+from rsl_rl.runners import OnPolicyRunner
+try:
+    from rsl_rl.runners import DistillationRunner
+except ImportError:
+    DistillationRunner = None
 try:
     from rsl_rl.runners import AMPRunner
 except ImportError:

@@ -168,7 +168,7 @@ class RPOFlatAgentCfg(BaseAgentCfg):
         self.seed = 42
         self.num_steps_per_env = 24
         self.max_iterations = 3001
-        self.save_interval = 10
+        self.save_interval = 100
         self.actor_obs_normalization = True
         self.critic_obs_normalization = True
         self.algorithm = RslRlPpoAlgorithmCfg(

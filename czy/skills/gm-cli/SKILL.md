@@ -784,3 +784,97 @@ Agent 应根据退出码决定下一步操作：
 | **镜像大小** | 19.2GB |
 
 该镜像原生支持 rsl-rl 3.0.1 和 dict 格式观测值，已在 X1_29 训练任务中验证通过。
+
+## 多账号额度管理与自动切换
+
+> **当 GM 平台账号额度耗尽时，自动切换到下一个可用账号继续训练。**
+
+### 账号池文件
+
+路径：`czy/skills/lab-notebook/api_key.json`
+
+结构：
+```json
+{
+  "accounts": [
+    {
+      "email": "xxx@barumart.com",
+      "api_key": "gm_sk_xxx",
+      "budget": 50.0,        // 总额度（元）
+      "used": 0.0,           // 已用额度（元）
+      "exhausted": false      // 是否耗尽
+    }
+  ]
+}
+```
+
+### Agent 执行规则
+
+#### 1. 选择当前账号
+
+每次需要执行 `gm` 命令前，Agent 读取 `api_key.json`，按顺序找到第一个 `exhausted == false` 的账号：
+
+```bash
+# 读取第一个可用账号的 api_key
+AVAIL_KEY=$(python3 -c "
+import json
+with open('czy/skills/lab-notebook/api_key.json') as f:
+    data = json.load(f)
+for acc in data['accounts']:
+    if not acc['exhausted']:
+        print(acc['api_key'])
+        break
+")
+```
+
+#### 2. 登录账号
+
+```bash
+gm auth login --api-key "$AVAIL_KEY"
+```
+
+验证登录成功：
+```bash
+gm auth whoami
+```
+
+#### 3. 判断额度耗尽
+
+以下任一情况判定为当前账号**额度耗尽**，需切换到下一个账号：
+
+| 信号 | 判断方式 |
+|------|---------|
+| `gm task create` 或 `gm task run` 返回余额不足错误 | stderr 中包含 `余额不足` / `insufficient balance` / `额度` 等关键词 |
+| `gm auth whoami` 返回余额为 0 | 检查返回 JSON 中的余额字段 |
+| 训练任务因计费失败被停止 | `gm task info` 状态为 failed，日志含计费相关错误 |
+
+#### 4. 标记耗尽并切换
+
+发现当前账号耗尽后，Agent **必须**更新 `api_key.json`：
+
+```bash
+python3 -c "
+import json
+with open('czy/skills/lab-notebook/api_key.json', 'r') as f:
+    data = json.load(f)
+for acc in data['accounts']:
+    if acc['api_key'] == '$AVAIL_KEY':
+        acc['exhausted'] = True
+        acc['used'] = acc['budget']
+        break
+with open('czy/skills/lab-notebook/api_key.json', 'w') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+print('账号已标记耗尽，切换到下一个账号')
+"
+```
+
+然后重新执行步骤 1~2 登录下一个账号。
+
+#### 5. 全部耗尽
+
+当 `api_key.json` 中所有账号 `exhausted == true` 时，停止操作并告知用户：
+
+```
+所有 GM 账号额度均已耗尽（共 N 个账号 × 50 元 = N*50 元）。
+请补充新账号或充值后重试。
+```

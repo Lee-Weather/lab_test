@@ -16,7 +16,7 @@ class PolicyMLP(nn.Module):
         layers = []
         prev = input_dim
         for h in hidden_dims:
-            layers += [nn.Linear(prev, h), nn.ReLU()]
+            layers += [nn.Linear(prev, h), nn.ELU()]
             prev = h
         layers.append(nn.Linear(prev, output_dim))
         self.actor = nn.Sequential(*layers)

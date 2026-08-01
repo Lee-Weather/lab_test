@@ -432,27 +432,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
         dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
 
-    # Monkey-patch runner.save: after every checkpoint save, also export a deployable JIT
-    # (actor + normalizer) from the training object directly, so the exported model always
-    # matches the trained network (no hand-written structure/activation mismatch).
-    # Named model_{iter}_deploy.pt so the GM platform uploads it (matches model_*.pt scan)
-    # and it can be used directly for sim2sim (torch.jit.load) without any conversion.
-    original_save = runner.save
-
-    def save_and_export(path, infos=None):
-        original_save(path, infos)
-        iter_num = runner.current_learning_iteration
-        try:
-            policy_nn = runner.alg.policy
-            normalizer = getattr(policy_nn, "actor_obs_normalizer", None)
-            deploy_name = f"model_{iter_num}_deploy.pt"
-            export_policy_as_jit(policy_nn, normalizer=normalizer, path=log_dir, filename=deploy_name)
-            print(f"[INFO] Exported deployable JIT: {os.path.join(log_dir, deploy_name)}")
-        except Exception as exc:
-            print(f"[WARN] Deploy JIT export failed at iter {iter_num}: {exc}")
-
-    runner.save = save_and_export
-
     # run training
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
 
@@ -475,20 +454,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     print(f"[INFO] Exported sim2sim models to: {export_model_dir}")
     print(f"[INFO]   - policy_{final_iter}.pt (JIT)")
     print(f"[INFO]   - policy_{final_iter}.onnx (ONNX)")
-
-    # Copy deployable JIT (Actor+Normalizer) to GM-accessible locations for sim2sim.
-    # GM uploads model_*.pt (state_dict, no normalizer) automatically; the JIT above is
-    # not uploaded. Copy it to log_dir root and /personal/ mount so GM storage can serve it.
-    import shutil
-    jit_src = os.path.join(export_model_dir, f"policy_{final_iter}.pt")
-    deploy_name = f"model_{final_iter}_deploy.pt"
-    # 1) log_dir root: GM platform scans this dir for uploads
-    shutil.copy(jit_src, os.path.join(log_dir, deploy_name))
-    # 2) /personal/ mount: GM persistent storage (used by play_x1.py for videos)
-    if os.path.isdir("/personal"):
-        shutil.copy(jit_src, os.path.join("/personal", deploy_name))
-        print(f"[INFO] Copied deployable JIT to /personal/{deploy_name}")
-    print(f"[INFO] Deployable model (Actor+Normalizer, ready for sim2sim): {deploy_name}")
 
     # close the simulator
     env.close()

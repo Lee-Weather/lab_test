@@ -455,6 +455,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     print(f"[INFO]   - policy_{final_iter}.pt (JIT)")
     print(f"[INFO]   - policy_{final_iter}.onnx (ONNX)")
 
+    # Also export a deployable JIT to log_dir root, named model_{final_iter}_deploy.pt.
+    # GM only uploads model_*.pt from log_dir root at task completion; this JIT is exported
+    # directly from the training object, so it can be used for sim2sim (torch.jit.load)
+    # without any conversion.
+    export_policy_as_jit(policy_nn, normalizer=normalizer, path=log_dir, filename=f"model_{final_iter}_deploy.pt")
+    print(f"[INFO] Exported deployable JIT (direct sim2sim): {os.path.join(log_dir, f'model_{final_iter}_deploy.pt')}")
+
     # close the simulator
     env.close()
 

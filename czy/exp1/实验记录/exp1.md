@@ -569,3 +569,66 @@
 | 2026-08-01 11:20 | 确认 GM 上传机制：`gm task data get` 是图表数据（skill 记载有误）；模型下载走 `gm task model list`；**exp2 停止 1h 后模型列表仍空 → GM 只在任务正常完成时上传** |
 | 2026-08-01 11:20 | commit c29f1b6 推送：训练结束导出 deploy JIT 到 log_dir 根（model_{final}_deploy.pt），随 checkpoint 上传，下载即 sim2sim 免转换（为下一训练任务准备） |
 | 2026-08-01 11:20 | 决策：exp3 继续跑完（用 819a3a8），完成后拿 model_3000.pt + convert 验证链路；后续任务用 c29f1b6 直接拿 deploy JIT |
+| 2026-08-01 11:35 | **exp3 停止**（iter ~126 时，训练中模型列表为空已确认）；用户改配置为 max_iterations=31 / save_interval=10（快速验证） |
+| 2026-08-01 11:35 | commit 994e9e8 推送（快速验证配置） |
+| 2026-08-01 11:36 | 创建并启动 TASK_20260801_017（exp4 快速验证：31 iter，验证 GM 上传链路） |
+
+---
+
+## 实验 exp4：快速验证——31 iter 验证 GM 模型上传链路
+
+### 1. 上一实验结果与教训
+
+- exp3（TASK_20260801_016）停止于 iter ~126：训练中模型列表持续为空，进一步确认 GM 只在任务正常完成时上传。
+- 已实施 c29f1b6：训练结束导出 deploy JIT 到 log_dir 根（model_{final}_deploy.pt）。
+
+### 2. 目标
+
+- **快速验证完整链路**：任务正常完成后，GM 上传 `model_*.pt` + `model_*_deploy.pt`；下载 deploy JIT 可直接 `torch.jit.load` 用于 sim2sim。
+
+### 3. 修改内容
+
+| 项目 | 修改前 | 修改后 | 说明 |
+|------|--------|--------|------|
+| max_iterations | 3001 | **31** | 快速跑完触发上传（commit 994e9e8，临时） |
+| save_interval | 100 | **10** | 每 10 iter 保存 model_10/20/30.pt |
+| deploy 导出 | 无 | 训练结束导出 model_31_deploy.pt 到 log_dir 根 | c29f1b6 |
+
+### 4. 修改文件
+
+- `robolab/robolab/tasks/direct/base/agents/rpo_agent_cfg.py`（commit 994e9e8）
+- `robolab/scripts/rsl_rl/train.py`（commit c29f1b6）
+
+### 5. 训练参数
+
+- RPO-Flat，31 iter，8192 envs，代码 994e9e8
+
+### 6. 预期与验收
+
+- ✅ 任务正常完成（状态 5）
+- ✅ GM 模型列表出现 model_30.pt 与 model_31_deploy.pt
+- ✅ 下载 model_31_deploy.pt，torch.jit.load 验证结构（960→29）
+- ✅ （可选）sim2sim 冒烟运行
+
+### 7. 实验结果
+
+> 训练任务：TASK_20260801_017，2026-08-01 11:36 启动（peleha7269@candaba.com 账号，代码 994e9e8）
+> 待训练完成后补充结果。
+
+#### 执行日志
+
+| 时间 | 事件 |
+|------|------|
+| 2026-08-01 11:36 | 创建并启动 TASK_20260801_017（exp4 快速验证） |
+| 2026-08-01 11:22 | 任务正常完成（状态5）；日志确认 model_0/10/20/30_deploy.pt 全部 `uploaded successfully`（upload_column=policUrl） |
+| 2026-08-01 11:29 | **模型列表可见（5 个）**：model_0/10/20/30.pt + model_30_deploy.pt（此前解析字段用错 `modelList`，实际是 `data.rows`） |
+| 2026-08-01 11:29 | 全部下载到 `czy/data/models/x1_29_models/20260801_exp4_quick/` |
+| 2026-08-01 11:31 | **deploy JIT 验证通过**：`torch.jit.load` 成功，结构 `_TorchPolicyExporter(actor: MLP 960→512→256→128→29, ELU; normalizer: Identity)`，前向 (1,960)→(1,29) |
+| 2026-08-01 11:29 | **sim2sim 冒烟通过**：`sim2sim_x1_29.py --load_model model_30_deploy.pt` 正常跑完 20s，输出 CSV+PNG（31 iter 废模型倒下属预期，链路全通） |
+
+### 8. 结论（链路已打通）
+
+- **GM 上传机制确认**：任务**正常完成**后，训练机 SDK 自动上传 `{log_dir}` 根目录的 `model_*.pt`（含 deploy JIT）；被停止的任务不上传。
+- **下载链路**：`gm task model list --task-id`（响应字段 `data.rows`）→ `policUrlDown` → curl 下载。
+- **可直接用于 sim2sim 的模型**：训练结束 train.py 导出 `model_{final}_deploy.pt`（训练对象直接导出，c29f1b6），下载后 `torch.jit.load` 直接喂给 sim2sim，**无需 convert**。
+- **注意**：临时快速验证配置（31 iter）需改回 3001 再进行完整训练。

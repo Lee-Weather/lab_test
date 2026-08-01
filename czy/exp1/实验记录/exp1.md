@@ -7,7 +7,8 @@
 | exp0 | 2026-07-29 | RPO-Flat 基线训练，9001轮，训练日志趋势分析 | 训练中 | TASK_20260729_127 | - | - |
 | exp1 | 2026-07-30 | 3001轮基线训练，ep_len 948✅，reward 7.26❌（目标25） | 失败 | TASK_20260730_176 | - | model_3000.pt |
 | exp1.1 | 2026-07-30 | 奖励权重优化：↑正向(track_vel×2,upward×2,air_time×4)，↓惩罚(torso×0.5,smoothness×0.5) | 已测试 | TASK_20260730_200 | - | model_3000.pt |
-| exp2 | 2026-08-01 | 修复sim2sim导出：train.py每次保存直接导出deploy JIT（monkey-patch，不启用归一化） | 暂停-方案调整 | TASK_20260801_004 | peleha7269@candaba.com | - |
+| exp2 | 2026-08-01 | 修复sim2sim导出：train.py每次保存直接导出deploy JIT（monkey-patch，不启用归一化） | 已停止-链路已验证 | TASK_20260801_014 | peleha7269@candaba.com | - |
+| exp3 | 2026-08-01 | 对比实验：只保存model_*.pt（去掉deploy导出），验证GM上传行为 | 训练中 | TASK_20260801_016 | peleha7269@candaba.com | - |
 
 ---
 
@@ -500,9 +501,9 @@
 
 ### 7. 实验结果
 
-> 训练任务：TASK_20260801_004，2026-08-01 09:42 启动（peleha7269@candaba.com 账号）
-> 注：原 TASK_20260731_160 为 yijed24226 账号草稿（未运行），跨账号无法启动，已用当前账号重建同配置任务。
-> 09:58 用户主动暂停训练（iter ~81，仅跑 11.6 分钟），待续。
+> 训练任务：TASK_20260801_014，2026-08-01 10:25 启动（peleha7269@candaba.com 账号，代码 58f2afe）
+> 注：原 TASK_20260731_160 为 yijed24226 账号草稿（未运行），跨账号无法启动，重建为 TASK_20260801_004；
+> 后因方案修正暂停（09:58），停止任务无法重启，重建为 TASK_20260801_014。
 > 待训练完成后补充结果。
 
 #### 执行日志
@@ -515,3 +516,56 @@
 | 2026-08-01 09:58 | 用户主动暂停训练（runtime 696s，iter ~81） |
 | 2026-08-01 10:10 | **方案修正**：实测 model_100.pt 无 normalizer 键 → 确认训练时归一化未启用（配置位置错误），原"复制含 normalizer JIT"方案无效 |
 | 2026-08-01 10:10 | 改为 monkey-patch runner.save：每次保存 checkpoint 直接导出 `model_{iter}_deploy.pt`（训练对象导出，不启用归一化） |
+| 2026-08-01 10:24 | commit 58f2afe 推送（train.py monkey-patch + convert ELU 修复） |
+| 2026-08-01 10:25 | 停止任务无法重启，重建 TASK_20260801_014 并启动 |
+| 2026-08-01 10:45 | 日志确认 iter 200 保存时成功导出 `model_200_deploy.pt`（monkey-patch 生效，无 WARN） |
+| 2026-08-01 10:52 | 用户主动停止训练（iter ~300+，导出链路已验证；GM 模型上传滞后，列表暂为空） |
+
+---
+
+## 实验 exp3：对比实验——只保存 model_*.pt（无 deploy 导出）
+
+### 1. 上一实验结果与教训
+
+- exp2（TASK_20260801_014）已停止：日志确认训练端导出 deploy JIT 链路打通（iter 200 → `model_200_deploy.pt`），**但 GM 平台模型列表始终为空（训练中与停止后均未同步）**，上传滞后问题未解决。
+- 待验证：模型上传滞后是否与 deploy 导出无关、只是平台同步周期问题。
+
+### 2. 目标
+
+- **对比实验**：恢复"只保存 `model_*.pt`"的原始训练，验证 GM 平台模型上传行为是否正常。
+- 确认训练期间/停止后 `model_*.pt` 能否出现在 GM 模型列表；训练指标与 exp1.1/exp2 同期相当。
+
+### 3. 修改内容
+
+| 项目 | 修改前（exp2） | 修改后（exp3） | 说明 |
+|------|---------------|---------------|------|
+| 训练期间导出 | monkey-patch 每次保存导出 `model_{iter}_deploy.pt` | **去掉**，仅 runner 自动保存 `model_*.pt` | commit 819a3a8 |
+| 训练结束 | 复制 exported JIT 到 log_dir 根 + /personal | **去掉**，仅保留 exported/policy_*.pt（GM 不扫描该目录） | 干净对比 |
+
+### 4. 修改文件
+
+- `robolab/scripts/rsl_rl/train.py`（commit 819a3a8：revert deploy 导出）
+
+### 5. 训练参数
+
+- 同 exp1.1/exp2：RPO-Flat，3001 iter，8192 envs，代码分支 x1_29（819a3a8）
+
+### 6. 预期与验收
+
+- GM 模型列表在训练中/停止后能出现 `model_*.pt` → 说明 exp2 上传滞后是平台同步周期问题（与 deploy 无关）
+- 若模型列表仍为空 → 需排查 GM 上传机制（可能只在任务正常完成后上传）
+
+### 7. 实验结果
+
+> 训练任务：TASK_20260801_016，2026-08-01 11:00 启动（peleha7269@candaba.com 账号，代码 819a3a8）
+> 待训练完成后补充结果。
+
+#### 执行日志
+
+| 时间 | 事件 |
+|------|------|
+| 2026-08-01 10:57 | commit 819a3a8 推送（train.py 回退：去掉 deploy 导出，只保存 model_*.pt） |
+| 2026-08-01 11:00 | 创建并启动 TASK_20260801_016（对比实验 exp3） |
+| 2026-08-01 11:20 | 确认 GM 上传机制：`gm task data get` 是图表数据（skill 记载有误）；模型下载走 `gm task model list`；**exp2 停止 1h 后模型列表仍空 → GM 只在任务正常完成时上传** |
+| 2026-08-01 11:20 | commit c29f1b6 推送：训练结束导出 deploy JIT 到 log_dir 根（model_{final}_deploy.pt），随 checkpoint 上传，下载即 sim2sim 免转换（为下一训练任务准备） |
+| 2026-08-01 11:20 | 决策：exp3 继续跑完（用 819a3a8），完成后拿 model_3000.pt + convert 验证链路；后续任务用 c29f1b6 直接拿 deploy JIT |

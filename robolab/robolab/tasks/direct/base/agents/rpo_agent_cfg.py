@@ -167,8 +167,8 @@ class RPOFlatAgentCfg(BaseAgentCfg):
         self.wandb_project: str = "x1_29_flat"
         self.seed = 42
         self.num_steps_per_env = 24
-        self.max_iterations = 3001
-        self.save_interval = 100
+        self.max_iterations = 31
+        self.save_interval = 10
         self.actor_obs_normalization = True
         self.critic_obs_normalization = True
         self.algorithm = RslRlPpoAlgorithmCfg(

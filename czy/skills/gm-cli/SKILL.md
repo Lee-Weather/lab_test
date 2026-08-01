@@ -110,7 +110,16 @@ description: Operates gm-cli (gm): auth/config/profile/project/task workflows, m
 
 当前方式：
 - `gm` 目前已有 `gm task model list`，可调用 `POST /api/task/model/info`
+- **响应字段在 `data.rows`**（列表结构），**不是 `data.modelList`**——误用 `modelList` 解析会恒为空
 - 取对应 checkpoint 中的`policUrlDown`链接，再用 `curl` 下载，默认保存到当前项目根路径下
+
+上传机制（重要，已验证）：
+- GM **只在任务正常完成时上传模型**（训练机 SDK 扫描 `{log_dir}` 根目录的 `model_*.pt` 自动上传）；训练中/被停止的任务**不上传**，模型列表恒为空
+- 因此：要拿模型必须让训练自然跑完，**不要中途停止**
+- 训练结束 train.py 会额外导出 `model_{final}_deploy.pt`（训练对象直接导出的 JIT：`_TorchPolicyExporter(actor, normalizer)`）到 log_dir 根，随 checkpoint 一起上传；下载后 `torch.jit.load` 可直接用于 sim2sim，**无需 convert 脚本**
+
+> **注意**：`gm task data get` 是**图表数据接口**（返回训练曲线/指标），**不是模型下载**。`gm task model list` 才是模型列表。
+> `gm task model list --checkpoint "3000"` 可按 checkpoint 编号过滤查询。
 
 任务打标签：
 - 更新标签：`gm task tag update --task-id "task_xxx" --tags "tag1,tag2"` 或 `--file ./tag.json`

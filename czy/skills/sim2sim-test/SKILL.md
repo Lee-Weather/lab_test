@@ -39,15 +39,25 @@ description: "训练完成后在 MuJoCo 中执行 sim2sim 测试。Invoke when t
 
 ### 步骤 1：下载训练模型
 
+**前提**：任务必须**正常完成**（状态 5）。训练中/被停止的任务 GM 不会上传模型（模型列表恒为空，拿不到）。
+
 ```bash
-# 获取 task ID 的最新 checkpoint
-gm task data get {TASK_ID} --dest /home/robot/czy/roboparty/lab_test/czy/data/models/x1_29_models/{YYYYMMDD}_{实验名}/
+# 列出任务的全部模型（响应字段为 data.rows，不是 data.modelList）
+gm task model list --task-id {TASK_ID} --limit 20
+
+# 取 model_{N}_deploy.pt 的 policUrlDown 链接，用 curl 下载
+curl -sL -o model_3000_deploy.pt "<policUrlDown>"
 ```
 
-- 下载最终的 `model_{N}.pt`（N 为最大 iteration，如 model_3000.pt）
+- **首选下载 `model_{N}_deploy.pt`**：训练结束时 train.py 自动从训练对象导出的 deploy JIT（结构 `_TorchPolicyExporter(actor, normalizer)`），下载后 `torch.jit.load` **直接用于 sim2sim，无需转换**。
+- 如需 checkpoint（续训/分析/convert），下载 `model_{N}.pt`。
 - 创建实验独立文件夹（如不存在），命名格式：`{YYYYMMDD}_{实验名}`
 
+> **不要使用 `gm task data get` 下载模型**——那是图表数据接口，返回的是训练曲线数据，不是模型文件。
+
 ### 步骤 2：转换模型为 JIT
+
+> **仅当只有 checkpoint（`model_{N}.pt`）时才需要转换**；若已下载 `model_{N}_deploy.pt`（deploy JIT）可跳过此步。
 
 ```bash
 cd /home/robot/czy/roboparty/lab_test

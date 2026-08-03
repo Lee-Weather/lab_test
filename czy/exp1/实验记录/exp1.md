@@ -10,7 +10,8 @@
 | exp2 | 2026-08-01 | 修复sim2sim导出：train.py每次保存直接导出deploy JIT（monkey-patch，不启用归一化） | 已停止-链路已验证 | TASK_20260801_014 | peleha7269@candaba.com | - |
 | exp2.1 | 2026-08-01 | 对比实验：只保存model_*.pt（去掉deploy导出），验证GM上传行为 | 已停止-确认GM仅在任务正常完成时上传 | TASK_20260801_016 | peleha7269@candaba.com | - |
 | exp2.2 | 2026-08-01 | 快速验证（31 iter）：GM模型上传链路+deploy JIT可加载+sim2sim冒烟 | ✅ 链路全通 | TASK_20260801_017 | peleha7269@candaba.com | model_30_deploy.pt |
-| exp2.3 | 2026-08-01 | 完整训练3001 iter，验证sim2sim稳定站立 | sim2sim失败-机器人倒下，待修复重训 | TASK_20260801_021 | peleha7269@candaba.com | model_3000_deploy.pt |
+| exp2.3 | 2026-08-01 | 完整训练3001 iter，验证sim2sim稳定站立 | sim2sim失败-机器人倒下，根因:default_pos左右非镜像 | TASK_20260801_021 | peleha7269@candaba.com | model_3000_deploy.pt |
+| exp2.4 | 2026-08-03 | 修复:左右腿default_pos镜像对称(FK验证dx=0 dz=0)，重训3001 iter | 训练中 | TASK_20260803_059 | peleha7269@candaba.com | - |
 
 ---
 
@@ -673,3 +674,101 @@
 | 时间 | 事件 |
 |------|------|
 | 2026-08-01 11:55 | 创建并启动 TASK_20260801_021（exp2.3 完整训练 3001 iter，ETA ~14:15） |
+| 2026-08-01 13:27 | 任务开始运行 |
+| 2026-08-01 15:47 | 任务正常完成（状态5），训练耗时 ~2h20m |
+| 2026-08-01 16:xx | 下载 model_3000.pt + model_3000_deploy.pt |
+| 2026-08-01 16:xx | **sim2sim 验证失败**：机器人在 1-2s 内倒下。CSV 诊断显示双脚不对称、姿态角迅速发散 |
+
+#### sim2sim 结果（exp2.3）
+
+| 指标 | exp2.3 实测 | 目标 | 判定 |
+|------|-------------|------|------|
+| 站立时长 | ~1-2s | 20s | ❌ |
+| 姿态角 | 迅速发散 | ±5° | ❌ |
+| 双支撑率 | ~0% | >70% | ❌ |
+| 结果 | 机器人翻滚倒下 | 稳定站立 | ❌ |
+
+#### 根因分析
+
+**核心问题：训练侧 default_pos 左右腿相同（非镜像），与 URDF 镜像关节几何不匹配。**
+
+- X1_29 URDF 的左右腿关节轴是镜像对称设计：
+  - 左 hip_pitch: origin rpy z=+1.5708, axis "0 0 1", limit [-1, 2]
+  - 右 hip_pitch: origin rpy z=-1.5708, axis "0 0 1", limit [-2, 1]
+  - 右 knee_pitch: axis "0 0 -1"（与左膝反向）
+- exp2.3 的 default_pos 左右腿使用相同值（hip_pitch L=R=-0.1, knee L=R=0.3, ankle L=R=-0.2）
+- FK 验证：相同值在镜像 URDF 下导致双脚不对称（dx=7cm 前后偏移, dz=1.3cm 高度差）
+- PD-only 控制器无法补偿这种系统性不对称，导致机器人失衡翻滚
+
+**验证方法**：用 MuJoCo 直读 URDF 计算 6 种配置的脚部世界坐标，证明左右镜像 default_pos 给出完美对称（dx=0, dz=0）。
+
+**对比参考**：X1 原始部署配置 `rl_x1_sim.yaml` 的 `pd_stand` init_state 即为左右镜像设计（L hip_pitch=+0.4, R=-0.4 等），是验证过的正确方案。
+
+---
+
+## 实验 exp2.4：左右腿 default_pos 镜像对称修复——重训验证 sim2sim 稳定站立
+
+### 1. 上一实验结果与教训
+
+> 数据：exp2.3 sim2sim 诊断（TASK_20260801_021，model_3000_deploy.pt）
+> - 训练指标达标（reward 58.58, ep_len 995），但 sim2sim 1-2s 内倒下
+> - **根因已定位**：default_pos 左右相同（非镜像）→ 双脚 dx=7cm, dz=1.3cm 不对称 → PD 无法自平衡
+> - FK 验证 + X1 部署代码对比确认：镜像 default_pos 给出完美对称（dx=0, dz=0）
+
+### 2. 目标
+
+- 用镜像对称 default_pos 重训 3001 iter
+- sim2sim 稳定站立 20 秒：姿态 ±5°、双支撑率 >70%、关节跟踪误差 <3°
+- 若仍不达标，继续诊断根因 → 修改 → 重训
+
+### 3. 修改内容
+
+| 修改 | 旧值 (exp2.3) | 新值 (exp2.4) | 说明 |
+|------|--------------|--------------|------|
+| 训练侧 default_pos（L腿） | hip_pitch=-0.1, knee=0.3, ankle=-0.2 | hip_pitch=+0.4, hip_roll=+0.05, hip_yaw=-0.31, knee=0.49, ankle=-0.21 | 镜像对称（X1部署值，FK验证dx=0 dz=0） |
+| 训练侧 default_pos（R腿） | hip_pitch=-0.1, knee=0.3, ankle=-0.2 | hip_pitch=-0.4, hip_roll=-0.05, hip_yaw=+0.31, knee=0.49, ankle=-0.21 | L腿的左右镜像 |
+| sim2sim default_pos | 同训练侧旧值 | 同训练侧新值 | 保持训练/部署一致 |
+
+### 4. 修改文件
+
+- `robolab/robolab/assets/robots/roboparty.py`（L210-225）：init_state joint_pos 改为镜像值
+- `robolab/scripts/mujoco/sim2sim_x1_29.py`（L314-320）：default_pos 同步更新
+- commit c5544a1，已推送到 x1_29 分支
+
+### 5. 训练参数
+
+| 参数 | 值 |
+|------|-----|
+| 训练方式 | 从零 |
+| GM账号 | peleha7269@candaba.com |
+| max_iterations | 3001 |
+| save_interval | 100 |
+| num_envs | 8192 |
+| seed | 42 |
+| 算力 | 1×4090D 24G，ESKU000001 |
+| 镜像 | BJX00000178, V000220 (IsaacSim:5.1 \| IsaacLab:2.3.2) |
+| 代码仓库 | lab_test.git, x1_29 分支, commit c5544a1 |
+| 启动命令 | `gm-run lab_test/robolab/scripts/rsl_rl/train.py --task=RPO-Flat --headless --logger=tensorboard --num_envs=8192` |
+
+### 6. 预期与验收
+
+**sim2sim 验收标准**（原地站立，20 秒）：
+
+| 指标 | exp2.3 实测 | exp2.4 目标 | 异常信号 |
+|------|-------------|-----------|---------|
+| 站立时长 | ~1-2s | 20s | < 10s |
+| 姿态角（俯仰/侧倾） | 迅速发散 | ±5° | > 15° |
+| 双支撑率 | ~0% | >70% | < 30% |
+| 关节跟踪误差 | - | <3° | > 10° |
+
+### 7. 实验结果
+
+> 训练任务：TASK_20260803_059，2026-08-03 11:39 启动（peleha7269 账号，代码 c5544a1）
+> 待训练完成后补充结果。
+
+#### 执行日志
+
+| 时间 | 事件 |
+|------|------|
+| 2026-08-03 11:39 | 创建并启动 TASK_20260803_059（exp2.4 镜像 default_pos 3001 iter，ETA ~14:00） |
+| - | 待训练完成 |

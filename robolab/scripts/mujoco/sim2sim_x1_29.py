@@ -312,11 +312,11 @@ if __name__ == '__main__':
                 4, 3.3, 3.3, 6, 2.5, 2.5,  # R leg
             ], dtype=np.double)
             default_pos = np.array([
-                0, 0, 0,                # lumbar
-                0.2, 0, 0, 0.5, 0, 0, 0,  # L arm (shoulder_pitch=0.2, elbow_pitch=0.5)
-                0.2, 0, 0, 0.5, 0, 0, 0,  # R arm
-                -0.1, 0, 0, 0.3, -0.2, 0, # L leg (hip_pitch=-0.1, knee=0.3, ankle_pitch=-0.2)
-                -0.1, 0, 0, 0.3, -0.2, 0, # R leg
+                0, 0, 0,                          # lumbar
+                0.2, 0, 0, 0.5, 0, 0, 0,          # L arm (shoulder_pitch=0.2, elbow_pitch=0.5)
+                0.2, 0, 0, 0.5, 0, 0, 0,          # R arm
+                0.4, 0.05, -0.31, 0.49, -0.21, 0, # L leg: 镜像对称 hip_pitch/roll/yaw
+                -0.4, -0.05, 0.31, 0.49, -0.21, 0,# R leg: hip_pitch=-0.4 (镜像)
             ], dtype=np.double)
             tau_limit = np.array([
                 120, 120, 120,          # lumbar

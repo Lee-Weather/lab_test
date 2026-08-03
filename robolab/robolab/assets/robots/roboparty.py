@@ -210,12 +210,17 @@ X1_29_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.65),
         joint_pos={
-            "left_hip_pitch_joint": -0.1,
-            "left_knee_pitch_joint": 0.3,
-            "left_ankle_pitch_joint": -0.2,
-            "right_hip_pitch_joint": -0.1,
-            "right_knee_pitch_joint": 0.3,
-            "right_ankle_pitch_joint": -0.2,
+            # 左右腿镜像对称 (FK验证: X1部署值, 完美对称 dx=0 dz=0)
+            "left_hip_pitch_joint": 0.4,
+            "left_hip_roll_joint": 0.05,
+            "left_hip_yaw_joint": -0.31,
+            "left_knee_pitch_joint": 0.49,
+            "left_ankle_pitch_joint": -0.21,
+            "right_hip_pitch_joint": -0.4,
+            "right_hip_roll_joint": -0.05,
+            "right_hip_yaw_joint": 0.31,
+            "right_knee_pitch_joint": 0.49,
+            "right_ankle_pitch_joint": -0.21,
             "left_shoulder_pitch_joint": 0.2,
             "left_elbow_pitch_joint": 0.5,
             "right_shoulder_pitch_joint": 0.2,

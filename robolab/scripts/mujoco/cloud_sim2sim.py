@@ -62,7 +62,8 @@ def clean_mjcf():
                 '<visual><headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>',
                 1,
             )
-            text = text.replace("<option ", '<option offwidth="1920" offheight="1080" ', 1)
+            # NOTE: offwidth/offheight are NOT valid MuJoCo option attrs;
+            # render resolution is set by mujoco.Renderer(width, height).
             with open(p, "w") as f:
                 f.write(text)
     out = os.path.join(CLEAN_DIR, "mjmodel_x1_29dof_perfect_mirrored_sim_flat.xml")

@@ -88,6 +88,7 @@ installed_version = metadata.version("rsl-rl-lib")
 import gymnasium as gym
 import os
 import time
+import math
 import torch
 import copy
 
@@ -425,6 +426,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     dt = env.unwrapped.step_dt
 
+    # numerical diagnostics: record robot state each step so behavior is
+    # verifiable even if video rendering fails (e.g. old GPU driver)
+    diag_rows = []
+    diag_step = 0
+    diag_csv = os.path.join("/personal", "play_diag.csv")
+
     # reset environment
     obs = env.get_observations()
     timestep = 0
@@ -453,6 +460,21 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             else:
                 actions = policy(obs)
             obs, _, _, _ = env.step(actions)
+        # record numerical diagnostics (works without rendering)
+        try:
+            _rpos = env.unwrapped.robot.data.root_pos_w[0]
+            _rquat = env.unwrapped.robot.data.root_quat_w[0]
+            _w, _x, _y, _z = _rquat.tolist()
+            _yaw = math.atan2(2.0 * (_w * _z + _x * _y), 1.0 - 2.0 * (_y * _y + _z * _z))
+            diag_rows.append([diag_step, float(_rpos[0]), float(_rpos[1]), float(_rpos[2]), _yaw])
+            if diag_step % 10 == 0 or diag_step == 1:
+                print(
+                    f"[DIAG] step={diag_step} pos=({_rpos[0]:.3f},{_rpos[1]:.3f},{_rpos[2]:.3f}) yaw={_yaw:.3f}rad",
+                    flush=True,
+                )
+        except Exception as _e:
+            print(f"[DIAG] step={diag_step} data unavailable: {_e}", flush=True)
+        diag_step += 1
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video
@@ -463,6 +485,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         sleep_time = dt - (time.time() - start_time)
         if args_cli.real_time and sleep_time > 0:
             time.sleep(sleep_time)
+    # write numerical diagnostics
+    if diag_rows:
+        try:
+            import csv
+            with open(diag_csv, "w", newline="") as _f:
+                _wr = csv.writer(_f)
+                _wr.writerow(["step", "x", "y", "z", "yaw"])
+                _wr.writerows(diag_rows)
+            print(f"[DIAG] CSV written to {diag_csv} ({len(diag_rows)} rows)", flush=True)
+        except Exception as _e:
+            print(f"[DIAG] CSV write failed: {_e}", flush=True)
     # close the simulator
     env.close()
 

@@ -116,7 +116,21 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-import robolab.tasks
+# install robolab package from repo if not available
+try:
+    import robolab.tasks  # noqa: F401
+except ImportError:
+    print("[INFO] robolab not found, installing from repo...")
+    import subprocess
+    _repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    _robolab_path = os.path.join(_repo_root, "robolab")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-deps", "--no-build-isolation", "--timeout", "300", "-e", _robolab_path])
+    import importlib
+    importlib.invalidate_caches()
+    if _robolab_path not in sys.path:
+        sys.path.insert(0, _robolab_path)
+    import robolab.tasks  # noqa: F401
+    print("[INFO] robolab installed and verified.")
 
 class TorchAttnEncPolicyExporter(torch.nn.Module):
     """Exporter of actor-critic into JIT file."""

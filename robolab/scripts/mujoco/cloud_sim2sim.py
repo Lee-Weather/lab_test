@@ -57,8 +57,13 @@ def clean_mjcf():
             text = re.sub(r' actuatorfrcrange="[^"]*"', "", text)
             text = re.sub(r'meshdir="[^"]*"', f'meshdir="{mesh_link}/"', text)
             text = text.replace("<compiler ", '<compiler autolimits="true" ', 1)
-            # NOTE: no manual headlight injection - MuJoCo has default lighting,
-            # and some xmls already contain <headlight> (schema: unique element).
+            # render resolution for mujoco.Renderer(1920x1080): need visual/global
+            # framebuffer >= that. Only inject once per xml that has <visual> and
+            # no existing <global> (schema: unique element).
+            if "<global" not in text and "<visual>" in text:
+                text = text.replace(
+                    "<visual>", '<visual><global offwidth="1920" offheight="1080"/>', 1
+                )
             with open(p, "w") as f:
                 f.write(text)
     out = os.path.join(CLEAN_DIR, "mjmodel_x1_29dof_perfect_mirrored_sim_flat.xml")

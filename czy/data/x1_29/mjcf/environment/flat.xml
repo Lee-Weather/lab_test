@@ -2,9 +2,9 @@
   <statistic center="0 0 0.55" extent="1.1"/>
 
   <visual>
+    <global azimuth="150" elevation="-20" offwidth="1920" offheight="1080"/>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
     <rgba haze="0.15 0.25 0.35 1"/>
-    <global azimuth="150" elevation="-20"/>
   </visual>
   <visual>
     <rgba com="0.502 1.0 0 0.5" contactforce="0.98 0.4 0.4 1" contactpoint="1.0 1.0 0.6 0.4"/>

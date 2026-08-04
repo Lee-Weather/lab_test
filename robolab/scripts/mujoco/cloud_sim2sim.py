@@ -56,11 +56,20 @@ def clean_mjcf():
             text = text.replace(' content_type="model/stl"', "")
             text = re.sub(r' actuatorfrcrange="[^"]*"', "", text)
             text = re.sub(r'meshdir="[^"]*"', f'meshdir="{mesh_link}/"', text)
-            text = text.replace("<compiler ", '<compiler autolimits="true" ', 1)
-            # render resolution for mujoco.Renderer(1920x1080): need visual/global
-            # framebuffer >= that. Only inject once per xml that has <visual> and
-            # no existing <global> (schema: unique element).
-            if "<global" not in text and "<visual>" in text:
+            if "autolimits" not in text:
+                text = text.replace("<compiler ", '<compiler autolimits="true" ', 1)
+            # render resolution for mujoco.Renderer(1920x1080): ensure visual/global
+            # framebuffer >= 1920 in EVERY xml (includes override each other at
+            # merge time, so a global without offwidth can wipe the 1920 setting).
+            _gm = re.search(r"<global\b([^>]*)/>", text)
+            if _gm:
+                if "offwidth" not in _gm.group(1):
+                    text = text.replace(
+                        _gm.group(0),
+                        f'<global offwidth="1920" offheight="1080"{_gm.group(1)}/>',
+                        1,
+                    )
+            elif "<visual>" in text:
                 text = text.replace(
                     "<visual>", '<visual><global offwidth="1920" offheight="1080"/>', 1
                 )

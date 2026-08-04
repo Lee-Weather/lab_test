@@ -489,11 +489,32 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     if diag_rows:
         try:
             import csv
+            import io
             with open(diag_csv, "w", newline="") as _f:
                 _wr = csv.writer(_f)
                 _wr.writerow(["step", "x", "y", "z", "yaw"])
                 _wr.writerows(diag_rows)
             print(f"[DIAG] CSV written to {diag_csv} ({len(diag_rows)} rows)", flush=True)
+            # Also dump full CSV to stdout so it can be recovered via task logs
+            _buf = io.StringIO()
+            _wr = csv.writer(_buf)
+            _wr.writerow(["step", "x", "y", "z", "yaw"])
+            _wr.writerows(diag_rows)
+            print("[DIAG] FULL_CSV_BEGIN", flush=True)
+            print(_buf.getvalue(), end="", flush=True)
+            print("[DIAG] FULL_CSV_END", flush=True)
+            # Also save as model_*.pt tensor in candidate dirs to test GM upload
+            _diag_tensor = torch.tensor(diag_rows, dtype=torch.float32)
+            for _p in [
+                os.path.join("/personal", "model_diag.pt"),
+                os.path.join("logs", "rsl_rl", agent_cfg.experiment_name, "model_diag.pt"),
+            ]:
+                try:
+                    os.makedirs(os.path.dirname(_p), exist_ok=True)
+                    torch.save(_diag_tensor, _p)
+                    print(f"[DIAG] saved tensor to {_p}", flush=True)
+                except Exception as _e:
+                    print(f"[DIAG] save {_p} failed: {_e}", flush=True)
         except Exception as _e:
             print(f"[DIAG] CSV write failed: {_e}", flush=True)
     # close the simulator

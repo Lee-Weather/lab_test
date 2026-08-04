@@ -38,26 +38,34 @@ def install_deps():
 
 
 def clean_mjcf():
-    os.makedirs(CLEAN_DIR, exist_ok=True)
-    out = os.path.join(CLEAN_DIR, "mjmodel_x1_29dof_perfect_mirrored_sim_flat.xml")
-    with open(MJCF_SRC, "r") as f:
-        text = f.read()
-    text = text.replace(' content_type="model/stl"', "")
-    text = re.sub(r' actuatorfrcrange="[^"]*"', "", text)
-    text = re.sub(r'meshdir="[^"]*"', f'meshdir="{CLEAN_DIR}/meshes/"', text)
-    text = text.replace("<compiler ", '<compiler autolimits="true" ', 1)
-    text = text.replace(
-        "<visual>",
-        '<visual><headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>',
-        1,
-    )
-    text = text.replace("<option ", '<option offwidth="1920" offheight="1080" ', 1)
-    with open(out, "w") as f:
-        f.write(text)
+    # copy full mjcf tree (keeps relative <include> structure), fix all xmls
+    if os.path.exists(CLEAN_DIR):
+        shutil.rmtree(CLEAN_DIR)
+    shutil.copytree(os.path.join(REPO_ROOT, "czy", "data", "x1_29", "mjcf"), CLEAN_DIR)
     mesh_link = os.path.join(CLEAN_DIR, "meshes")
     if os.path.islink(mesh_link) or os.path.exists(mesh_link):
         shutil.rmtree(mesh_link)
     os.symlink(MESHES_DIR, mesh_link)
+    for root, _dirs, files in os.walk(CLEAN_DIR):
+        for fn in files:
+            if not fn.endswith(".xml"):
+                continue
+            p = os.path.join(root, fn)
+            with open(p, "r") as f:
+                text = f.read()
+            text = text.replace(' content_type="model/stl"', "")
+            text = re.sub(r' actuatorfrcrange="[^"]*"', "", text)
+            text = re.sub(r'meshdir="[^"]*"', f'meshdir="{mesh_link}/"', text)
+            text = text.replace("<compiler ", '<compiler autolimits="true" ', 1)
+            text = text.replace(
+                "<visual>",
+                '<visual><headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>',
+                1,
+            )
+            text = text.replace("<option ", '<option offwidth="1920" offheight="1080" ', 1)
+            with open(p, "w") as f:
+                f.write(text)
+    out = os.path.join(CLEAN_DIR, "mjmodel_x1_29dof_perfect_mirrored_sim_flat.xml")
     print(f"[cloud_sim2sim] cleaned MJCF -> {out}", flush=True)
     return out
 

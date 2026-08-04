@@ -322,12 +322,22 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     if args_cli.checkpoint:
         resume_path = retrieve_file_path(args_cli.checkpoint)
     else:
-        # GM platform: search /personal/ for mounted checkpoint first
+        # GM platform: search /personal/ and cwd for mounted checkpoint
         import glob
-        _personal_pts = sorted(glob.glob("/personal/**/*.pt", recursive=True))
-        _personal_pts = [p for p in _personal_pts if "model_" in os.path.basename(p) and "deploy" not in p]
-        if _personal_pts:
-            resume_path = _personal_pts[0]
+        import shutil
+        _search_pts = []
+        for _d in ["/personal", os.getcwd()]:
+            _search_pts.extend(sorted(glob.glob(os.path.join(_d, "**", "*.pt"), recursive=True)))
+        _search_pts = [p for p in _search_pts if "model_" in os.path.basename(p) and "deploy" not in p]
+        if _search_pts:
+            resume_path = _search_pts[0]
+            # Copy to /personal/ so video output lands in /personal/videos/play/
+            _dst = "/personal/model_loaded.pt"
+            if os.path.abspath(resume_path) != os.path.abspath(_dst):
+                os.makedirs("/personal", exist_ok=True)
+                shutil.copy2(resume_path, _dst)
+                resume_path = _dst
+            print(f"[INFO] Using checkpoint: {resume_path}")
         else:
             resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 

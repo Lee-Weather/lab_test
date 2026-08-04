@@ -7,7 +7,7 @@ Usage:
     python sim2sim_x1_29.py --load_model policy_300.pt --headless
 """
 import numpy as np
-import mujoco, mujoco_viewer
+import mujoco
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 import torch
@@ -47,9 +47,17 @@ def pd_control(target_q, q, kp, target_dq, dq, kd):
 def run_mujoco(policy, cfg, headless=False):
     model = mujoco.MjModel.from_xml_path(cfg.sim_config.mujoco_model_path)
     model.opt.timestep = cfg.sim_config.dt
+    if getattr(cfg.sim_config, 'use_implicit', False):
+        model.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICIT
+        model.dof_damping[6:] = cfg.robot_config.kds
+        print(f"Using mjINT_IMPLICIT integrator with dof_damping (kd implicit)")
     data = mujoco.MjData(model)
+    data.qpos[2] = 0.65
     data.qpos[-cfg.robot_config.num_actions:] = cfg.robot_config.default_pos
-    mujoco.mj_step(model, data)
+    mujoco.mj_forward(model, data)
+
+    # No settle phase: start policy immediately from z=0.65 (matches Isaac Lab training init)
+    # Settle phase was found harmful in deployment diagnostics (robot drops to unstable position)
 
     os.environ['__GLX_VENDOR_LIBRARY_NAME'] = 'nvidia'
     if headless:
@@ -62,6 +70,7 @@ def run_mujoco(policy, cfg, headless=False):
         cam.lookat = [0, 0, 1]
         out = cv2.VideoWriter('simulation.mp4', fourcc, 1.0 / cfg.sim_config.dt / cfg.sim_config.decimation, (1920, 1080))
     else:
+        import mujoco_viewer
         viewer = mujoco_viewer.MujocoViewer(model, data, mode='window', width=1920, height=1080)
         viewer.cam.distance = 4.0
         viewer.cam.azimuth = 45.0
@@ -196,7 +205,11 @@ def run_mujoco(policy, cfg, headless=False):
                 viewer.render()
 
         target_vel = np.zeros((cfg.robot_config.num_actions), dtype=np.double)
-        tau = pd_control(target_pos, q, cfg.robot_config.kps, target_vel, dq, cfg.robot_config.kds)
+        if getattr(cfg.sim_config, 'use_implicit', False):
+            # kd handled implicitly via dof_damping; only apply kp explicitly
+            tau = pd_control(target_pos, q, cfg.robot_config.kps, target_vel, dq * 0, cfg.robot_config.kds * 0)
+        else:
+            tau = pd_control(target_pos, q, cfg.robot_config.kps, target_vel, dq, cfg.robot_config.kds)
         tau = np.clip(tau, -cfg.robot_config.tau_limit, cfg.robot_config.tau_limit)
         # Use qfrc_applied (qpos order) instead of data.ctrl (actuator order)
         data.qfrc_applied[6:] = tau
@@ -292,8 +305,9 @@ if __name__ == '__main__':
         class sim_config:
             mujoco_model_path = os.environ.get('X1_29_MJCF', os.path.join(X1_29_DATA_DIR, 'mjcf', 'mjmodel_x1_29dof_perfect_mirrored_sim_flat.xml'))
             sim_duration = 20.0
-            dt = 0.001
-            decimation = 20
+            dt = 0.005
+            decimation = 4
+            use_implicit = True  # mjINT_IMPLICIT + dof_damping for kd (best deployment config)
 
         class robot_config:
             # URDF/Isaac joint order: lumbar(3), L_arm(7), R_arm(7), L_leg(6), R_leg(6)

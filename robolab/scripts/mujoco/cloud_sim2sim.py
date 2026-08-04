@@ -153,6 +153,7 @@ def main():
     if not args.skip_install:
         install_deps()
 
+    os.makedirs(args.workdir, exist_ok=True)
     mjcf = clean_mjcf()
     policy = os.path.join(args.workdir, "policy_3000.pt")
     convert_ckpt(ckpt, policy)

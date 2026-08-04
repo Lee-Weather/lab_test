@@ -308,7 +308,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     if args_cli.checkpoint:
         resume_path = retrieve_file_path(args_cli.checkpoint)
     else:
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        # GM platform: search /personal/ for mounted checkpoint first
+        import glob
+        _personal_pts = sorted(glob.glob("/personal/**/*.pt", recursive=True))
+        _personal_pts = [p for p in _personal_pts if "model_" in os.path.basename(p) and "deploy" not in p]
+        if _personal_pts:
+            resume_path = _personal_pts[0]
+        else:
+            resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     log_dir = os.path.dirname(resume_path)
 

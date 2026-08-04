@@ -119,6 +119,23 @@ def resolve_checkpoint(ckpt):
     return None
 
 
+def print_diag(workdir):
+    """Print condensed rows from isaac_diag CSV to stdout as fallback data."""
+    import csv as _csv
+    files = glob.glob(os.path.join(workdir, "isaac_diag_*.csv"))
+    if not files:
+        print("[cloud_sim2sim] no isaac_diag CSV found", flush=True)
+        return
+    path = files[0]
+    with open(path, "r") as f:
+        rows = list(_csv.reader(f))
+    print(f"[cloud_sim2sim] DIAG_CSV_BEGIN {path} rows={len(rows)-1}", flush=True)
+    for i, row in enumerate(rows):
+        if i == 0 or i % 10 == 0:
+            print("|".join(row), flush=True)
+    print("[cloud_sim2sim] DIAG_CSV_END", flush=True)
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -140,6 +157,7 @@ def main():
     policy = os.path.join(args.workdir, "policy_3000.pt")
     convert_ckpt(ckpt, policy)
     video = run_sim2sim(policy, mjcf, args.workdir)
+    print_diag(args.workdir)
     package_video(video)
     print("[cloud_sim2sim] DONE", flush=True)
 

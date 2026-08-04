@@ -193,8 +193,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=MISSING),
-            "stiffness_distribution_params": (0.6, 1.5),
-            "damping_distribution_params": (0.6, 1.5),
+            "stiffness_distribution_params": (0.8, 1.2),
+            "damping_distribution_params": (0.8, 1.2),
             "operation": "scale",
         },
     )
@@ -204,7 +204,7 @@ class EventCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=MISSING),
             "friction_distribution_params": (1.0, 1.0),
-            "armature_distribution_params": (0.6, 1.4),
+            "armature_distribution_params": (0.8, 1.2),
             "operation": "scale",
         },
     )

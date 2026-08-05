@@ -566,7 +566,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             if _vids:
                 with open(_vids[-1], "rb") as _f:
                     _raw = _f.read()
-                import numpy as np
                 _pkg = {
                     "format": "mp4",
                     "filename": os.path.basename(_vids[-1]),

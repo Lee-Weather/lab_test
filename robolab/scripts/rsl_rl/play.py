@@ -309,6 +309,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.episode_length_s = 40.0
     env_cfg.commands.heading_command=False
     env_cfg.commands.rel_standing_envs = 0.0
+    # keep the commanded velocity constant during play: otherwise
+    # UniformVelocityCommand.compute() re-samples the command every
+    # resampling_time_range (10s default), overwriting the value set below.
+    env_cfg.commands.resampling_time_range = (1.0e9, 1.0e9)
 
     if args_cli.plane:
         env_cfg.scene.terrain.terrain_generator = None

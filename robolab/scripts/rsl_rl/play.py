@@ -67,6 +67,12 @@ args_cli, hydra_args = parser.parse_known_args()
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
+    # bypass the NVIDIA driver version verification
+    # (GM container driver 535.05 < Isaac Sim 5.1 minimum 535.129 -> RTX renderer refuses to start)
+    _kit = getattr(args_cli, "kit_args", "") or ""
+    if "--/rtx/verifyDriverVersion" not in _kit:
+        args_cli.kit_args = (_kit + " --/rtx/verifyDriverVersion/enabled=false").strip()
+        print(f"[INFO] Applied kit_args: {args_cli.kit_args}", flush=True)
 
 # clear out sys.argv for Hydra
 sys.argv = [sys.argv[0]] + hydra_args
@@ -347,6 +353,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # set the log directory for the environment (works for all environment types)
     env_cfg.log_dir = log_dir
 
+    if args_cli.video:
+        # use a higher resolution for the replay video
+        env_cfg.viewer.resolution = (1920, 1080)
+        print(f"[INFO] Viewer resolution set to {env_cfg.viewer.resolution} for video recording.", flush=True)
+
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
@@ -519,6 +530,31 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             print(f"[DIAG] CSV write failed: {_e}", flush=True)
     # close the simulator
     env.close()
+
+    # package the recorded video for GM SDK upload (SDK only scans logs/rsl_rl/)
+    if args_cli.video:
+        try:
+            import glob as _glob
+            _vids = sorted(_glob.glob(os.path.join("/personal", "videos", "play", "*.mp4")))
+            if not _vids:
+                _vids = sorted(_glob.glob(os.path.join(log_dir, "videos", "play", "*.mp4")))
+            if _vids:
+                with open(_vids[-1], "rb") as _f:
+                    _raw = _f.read()
+                import numpy as np
+                _pkg = {
+                    "format": "mp4",
+                    "filename": os.path.basename(_vids[-1]),
+                    "bytes": np.frombuffer(_raw, dtype=np.uint8),
+                }
+                _dst = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name, "model_isaac_video.pt")
+                os.makedirs(os.path.dirname(_dst), exist_ok=True)
+                torch.save(_pkg, _dst)
+                print(f"[VIDEO] packaged {len(_raw)} bytes -> {_dst}", flush=True)
+            else:
+                print("[VIDEO] No mp4 found under /personal/videos/play or log_dir", flush=True)
+        except Exception as _e:
+            print(f"[VIDEO] packaging failed: {_e}", flush=True)
 
 
 if __name__ == "__main__":

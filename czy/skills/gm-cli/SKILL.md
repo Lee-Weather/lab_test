@@ -794,6 +794,105 @@ Agent 应根据退出码决定下一步操作：
 
 该镜像原生支持 rsl-rl 3.0.1 和 dict 格式观测值，已在 X1_29 训练任务中验证通过。
 
+## GM 回放 Isaac Sim 仿真（play 任务录视频）
+
+> 在 GM 容器内用 Isaac Lab 的 `play.py` 回放训练好的 checkpoint，输出数值轨迹 + Isaac Sim 回放视频；视频打包后经 SDK 自动上传，本地下载解包。
+
+### 适用场景
+- 本地没有 Isaac Lab / Isaac Sim，只有 GM 云端环境（BJX00000178 / V000220）
+- 需要验证策略在 Isaac Sim 中的真实行为（物理 + 渲染），或生成回放视频
+
+### 关键脚本
+`lab_test/robolab/scripts/rsl_rl/play.py`（已内置以下能力，commit `b71ba97` 起）：
+- 自动搜索 `/personal/` 与 cwd 下 `model_*.pt`（排除 deploy），复制为 `/personal/model_loaded.pt` 后加载
+- `--video` 时自动：`enable_cameras=True` + 注入 `--kit_args "--/rtx/verifyDriverVersion/enabled=false"`（绕过 RTX 驱动版本校验）+ viewer 分辨率 1920×1080
+- 每 10 步打印 `[DIAG]`，结束输出 `FULL_CSV_BEGIN...FULL_CSV_END`（501 行数值轨迹到 stdout）
+- 保存诊断 tensor 为 `model_diag.pt`；`--video` 时把录制的 mp4 打包为 `model_isaac_video.pt` 写入 `logs/rsl_rl/{experiment_name}/`（SDK 扫描目录）自动上传
+
+### 任务 JSON（回放 + 视频）
+在「恢复训练任务」模板基础上替换入口：
+- `trainType=2`，`checkPointFilePath` 取源 checkpoint（`gm task model list` 返回的 `policUrl`），`checkPointMountPath=/personal`
+- 已实测成功的配置（X1_29 / exp2.5 / TASK_20260805_007）：
+
+```json
+{
+  "taskBaseInfo": {
+    "projectId": "PRO_20260730_020",
+    "taskType": "1",
+    "trainType": "2",
+    "taskName": "isaac-video-exp2.5-v8",
+    "taskDescription": "Isaac Lab play 回放视频",
+    "taskTag": [],
+    "goodsId": "ESKU000001",
+    "gpuNum": 1,
+    "imageId": "BJX00000178",
+    "imageVersion": "V000220",
+    "personalDataPath": "/personal"
+  },
+  "taskCodeInfo": {
+    "codeType": "2",
+    "codeUrl": "[{\"codeUrl\":\"https://github.com/Lee-Weather/lab_test.git\",\"versionType\":\"1\",\"versionName\":\"x1_29\"}]",
+    "mainCodeUri": "lab_test/robolab/scripts/rsl_rl/play.py",
+    "hparamsPath": null,
+    "startScript": "gm-run lab_test/robolab/scripts/rsl_rl/play.py --task=RPO-Flat --video --video_length=500 --num_envs=1 --headless",
+    "isOpen": "1",
+    "checkPointFilePath": "upload/2026/8/3/model_3000_20260803204002A515.pt",
+    "checkPointMountPath": "/personal",
+    "resumeFromTaskId": "TASK_20260803_144",
+    "resumeFromTaskName": "exp2.5-enable-normalization-3001iter",
+    "resumeFromCheckPoint": "3000"
+  },
+  "runtimeReminderConfig": {
+    "enableRuntimeReminder": false,
+    "reminderDurations": []
+  }
+}
+```
+
+### 步骤
+1. 确认任务名：以容器内仓库注册名为准（如 `RPO-Flat`；`-Play` 后缀会被 play.py 自动剥离，训练任务名不带 `-Play`）
+2. `gm task create --file ./create-play.json` → 取 `taskId` → `gm task run --task-id ...`
+3. 等待任务完成（`taskStatus=5`，约 4-6 分钟），查日志确认关键标记：
+   - `[INFO] Applied kit_args: --/rtx/verifyDriverVersion/enabled=false`
+   - `Driver Version: 535.05.03 | Graphics API: Vulkan`（渲染器初始化成功，不再出现 `rtx driver verification failed`）
+   - `[DIAG]` 步进到 500 → `[VIDEO] packaged N bytes -> logs/rsl_rl/x1_29_flat/model_isaac_video.pt`
+4. `gm task model list --task-id ...` 找 `model_isaac_video.pt`（视频）和 `model_diag.pt`（轨迹），取 `policUrlDown` 用 `curl` 下载
+5. 本地解包（视频与 diag 均为此格式）：
+
+```python
+import torch, numpy as np
+d = torch.load('/tmp/model_isaac_video.pt', map_location='cpu', weights_only=False)
+with open('simulation.mp4', 'wb') as f:
+    f.write(np.asarray(d['bytes'], dtype=np.uint8).tobytes())
+```
+
+### 两个关键坑（已验证）
+1. **RTX 驱动版本校验（渲染失败的头号原因）**：容器驱动 535.05 < Isaac Sim 5.1 最低 535.129，默认报 `rtx driver verification failed` → 渲染器不初始化、`--video` 输出目录为空。**绕过方式**：AppLauncher 的 `--kit_args "--/rtx/verifyDriverVersion/enabled=false"`（play.py 在 `--video` 时已自动注入）。该校验只是软门禁，绕过后可正常用 Vulkan 渲染 1920×1080 视频。
+2. **SDK 只上传 `logs/rsl_rl/{exp}/` 根目录下的 `model_*.pt`**：写到 `/personal/` 的视频/诊断不会被上传，必须打包成 `model_*.pt` 放入 logs 目录（SDK 容器 cwd 是 `/workspace/isaaclab`）。`gm task storage list` 恒为空是正常现象。
+
+### 相机对准/跟随经验（headless 录制，v9–v14 实战验证）
+
+> 现象：视频成功渲染但"摄像机没有拍到机器人"（画面空白或只有上半身）。机器人实际为**纯白色**，位于画面下方，不要用橙色/鲜艳色 mask 判断是否入画。
+
+1. **根因一：相机对准世界原点，而机器人出生在原点外**。`ViewerCfg` 默认 `origin_type="world"`、eye=(7.5,7.5,7.5)、lookat=(0,0,0)，相机对准世界原点；但生成的网格地形里 env0 出生在约 `(8,-16)`（距原点 ~18m），画面自然是空地。
+2. **根因二（headless 关键）**：`ViewportCameraController` 的 `asset_root` 跟踪靠 kit app 的 post-update 回调 + `sim.set_camera_view`（受 `_has_gui or _offscreen_render or _render_viewport` 守卫），headless offscreen 录制下**不可靠**；且 RecordVideo 抓帧发生在 `wrapper.step()` 内部、早于循环里手动的相机更新。实测 v11（该方案）虽能拍到但行为不稳定。
+3. **可靠方案（v13/v14 采用的独立相机）**：
+   - 定义独立相机 prim：`UsdGeom.Camera.Define(stage, "/Camera_Replay")`，并设 `env_cfg.viewer.cam_prim_path = "/Camera_Replay"`（录制 render product 就指向它）
+   - 每步直接用 USD transform 写相机位姿：`UsdGeom.Xformable(cam_prim).ClearXformOpOrder()` + `AddTransformOp().Set(矩阵)`；`eye = robot_root_pos + (3,-3,1.8)`、`target = robot_root_pos + (0,0,0.3)`
+   - 循环开始前先设一次初始位姿，否则第 0 帧在默认位置
+4. **大坑：`Gf.Matrix4d().SetLookAt(eye, target, up)` 返回的是 view 矩阵（world→camera）**，直接用作相机 world transform 会把相机摆到错误位置（实测拍向天空 → 画面整片纯蓝）。必须 `.GetInverse()` 得到 camera→world 矩阵后再 `Set`。
+5. **大坑：焦距**。`UsdGeom.Camera.Define` 默认 `focalLength=50mm`，水平 FOV 仅 ~24°，4.3m 站距下只能拍到机器人肩部以上。设 `GetFocalLengthAttr().Set(24.0)`（水平 FOV ~47°）即可全身入画。
+6. **经验参数**（X1_29，1920×1080）：eye=(3,-3,1.8)、lookat=(0,0,0.3)、focal=24mm。
+7. **视频时长**：录制 fps=50，`--video_length=1500` 得 30s 视频；1500 帧渲染约 7-8 分钟任务。
+8. **首帧黑屏**：rep 渲染首帧未完成时 RecordVideo 抓到全黑帧，属正常，可忽略。
+9. 视频产物本地存放：`czy/data/isaac_play_v{ver}_20260805.mp4`（每次实验一个文件，便于人工查看）。
+
+### 补充说明
+- 视频录制使用 DirectRLEnv 的 viewer 相机（`cfg.viewer.cam_prim_path`，默认 `/Camera`），**场景无需额外定义相机传感器**；场景无 RTX 相机时 `render("rgb_array")` 返回 None → 视频为空（与驱动问题表现相同，需从日志区分）
+- 数值诊断即可判断行为（如 yaw 持续漂移 ≈ 360°/500 步），即使渲染受限也可先做物理回放验证
+- 只验证数值不需要视频时，去掉 `--video`（免渲染，任务更快）
+- 若 Isaac Sim 渲染仍不可用（驱动过旧无法绕过），可退而求其次用 MuJoCo 渲染方案：`lab_test/robolab/scripts/mujoco/cloud_sim2sim.py`（EGL 渲染，不依赖 RTX 驱动），但那是 MuJoCo 物理不是 Isaac Sim 物理，需向用户明示
+
 ## 多账号额度管理与自动切换
 
 > **当 GM 平台账号额度耗尽时，自动切换到下一个可用账号继续训练。**

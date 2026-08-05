@@ -58,6 +58,9 @@ parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--cmd_vx", type=float, default=0.0, help="Velocity command vx (m/s), within train range [-0.6, 1.0].")
+parser.add_argument("--cmd_vy", type=float, default=0.0, help="Velocity command vy (m/s), within train range [-0.5, 0.5].")
+parser.add_argument("--cmd_wz", type=float, default=0.0, help="Velocity command yaw_rate (rad/s), within train range [-1.57, 1.57].")
 
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
@@ -386,9 +389,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         _cam_prim = _cam_usd.GetPrim()
         print(f"[CAM] defined replay camera prim at /Camera_Replay (valid={bool(_cam_prim)}, focal=24mm)", flush=True)
 
-    env.unwrapped.command_generator.command[:, 0] = 0.0
-    env.unwrapped.command_generator.command[:, 1] = 0.0
-    env.unwrapped.command_generator.command[:, 2] = 0.0
+    env.unwrapped.command_generator.command[:, 0] = args_cli.cmd_vx
+    env.unwrapped.command_generator.command[:, 1] = args_cli.cmd_vy
+    env.unwrapped.command_generator.command[:, 2] = args_cli.cmd_wz
+    print(
+        f"[INFO] Velocity command: vx={args_cli.cmd_vx:.2f} m/s, vy={args_cli.cmd_vy:.2f} m/s, "
+        f"yaw_rate={args_cli.cmd_wz:.2f} rad/s",
+        flush=True,
+    )
 
     if hasattr(env_cfg, 'interrupt') and env_cfg.interrupt.use_interrupt:
         env.unwrapped.interrupt_rad_curriculum = torch.ones(env_cfg.scene.num_envs, dtype=torch.float, device=env.unwrapped.device, requires_grad=False)

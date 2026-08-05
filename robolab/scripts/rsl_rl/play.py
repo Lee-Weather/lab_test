@@ -355,17 +355,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.log_dir = log_dir
 
     if args_cli.video:
-        # frame the recorded camera on the robot.
-        # note: the recorded camera is /OmniverseKit_Persp (ViewerCfg.cam_prim_path default).
-        # the default world-origin framing misses the robot because env 0 spawns off-origin
-        # inside the generated terrain grid (e.g. (8, -16)).
-        env_cfg.viewer.origin_type = "asset_root"
-        env_cfg.viewer.asset_name = "robot"
+        # Use a dedicated camera prim for recording, driven directly via USD transforms.
+        # The default viewport camera (/OmniverseKit_Persp) is not reliably updated in
+        # headless offscreen rendering, and env 0 spawns ~18 m off the world origin, so
+        # the default world-origin framing misses the robot entirely.
+        env_cfg.viewer.cam_prim_path = "/Camera_Replay"
         env_cfg.viewer.eye = (3.0, -3.0, 1.8)
         env_cfg.viewer.lookat = (0.0, 0.0, 0.9)
         env_cfg.viewer.resolution = (1920, 1080)
         print(
-            f"[INFO] Viewer: origin_type=asset_root asset={env_cfg.viewer.asset_name} "
+            f"[INFO] Viewer: cam_prim_path={env_cfg.viewer.cam_prim_path} "
             f"eye={env_cfg.viewer.eye} resolution={env_cfg.viewer.resolution}",
             flush=True,
         )
@@ -374,6 +373,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+
+    if args_cli.video:
+        # define the replay camera prim that rep will render into
+        import omni.usd
+        from pxr import UsdGeom, Gf
+        _stage = omni.usd.get_context().get_stage()
+        _cam_prim = UsdGeom.Camera.Define(_stage, "/Camera_Replay").GetPrim()
+        print(f"[CAM] defined replay camera prim at /Camera_Replay (valid={bool(_cam_prim)})", flush=True)
 
     env.unwrapped.command_generator.command[:, 0] = 0.0
     env.unwrapped.command_generator.command[:, 1] = 0.0
@@ -460,6 +467,24 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # reset environment
     obs = env.get_observations()
     timestep = 0
+
+    if args_cli.video:
+        # frame the replay camera on the initial robot pose so frame 0 is correct too
+        try:
+            _rpos0 = env.unwrapped.robot.data.root_pos_w[0].cpu().numpy()
+            _eye0 = _rpos0 + _cam_eye_offset
+            _tgt0 = _rpos0 + _cam_look_offset
+            _m0 = Gf.Matrix4d().SetLookAt(
+                Gf.Vec3d(float(_eye0[0]), float(_eye0[1]), float(_eye0[2])),
+                Gf.Vec3d(float(_tgt0[0]), float(_tgt0[1]), float(_tgt0[2])),
+                Gf.Vec3d(0.0, 0.0, 1.0),
+            )
+            _xf0 = UsdGeom.Xformable(_cam_prim)
+            _xf0.ClearXformOpOrder()
+            _xf0.AddTransformOp().Set(_m0)
+            print(f"[CAM] initial eye=({_eye0[0]:.2f},{_eye0[1]:.2f},{_eye0[2]:.2f})", flush=True)
+        except Exception as _e:
+            print(f"[CAM] initial camera setup failed: {_e}", flush=True)
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -500,16 +525,26 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         except Exception as _e:
             print(f"[DIAG] step={diag_step} data unavailable: {_e}", flush=True)
         diag_step += 1
-        # keep the recorded camera framed on the robot (belt-and-suspenders with asset_root tracking)
+        # drive the replay camera to keep the robot framed (direct USD transform write,
+        # independent of the viewport/ViewportCameraController path)
         if args_cli.video:
             try:
                 _rpos = env.unwrapped.robot.data.root_pos_w[0].cpu().numpy()
-                env.unwrapped.sim.set_camera_view(
-                    eye=tuple(_rpos + _cam_eye_offset), target=tuple(_rpos + _cam_look_offset)
+                _eye = _rpos + _cam_eye_offset
+                _tgt = _rpos + _cam_look_offset
+                _m = Gf.Matrix4d().SetLookAt(
+                    Gf.Vec3d(float(_eye[0]), float(_eye[1]), float(_eye[2])),
+                    Gf.Vec3d(float(_tgt[0]), float(_tgt[1]), float(_tgt[2])),
+                    Gf.Vec3d(0.0, 0.0, 1.0),
                 )
+                _xf = UsdGeom.Xformable(_cam_prim)
+                _xf.ClearXformOpOrder()
+                _xf.AddTransformOp().Set(_m)
+                if diag_step % 50 == 0:
+                    print(f"[CAM] eye=({_eye[0]:.2f},{_eye[1]:.2f},{_eye[2]:.2f}) target=({_tgt[0]:.2f},{_tgt[1]:.2f},{_tgt[2]:.2f})", flush=True)
             except Exception as _e:
                 if not getattr(_cam_eye_offset, "_warned", False):
-                    print(f"[CAM] manual camera reposition failed: {_e}", flush=True)
+                    print(f"[CAM] camera update failed: {_e}", flush=True)
                     setattr(_cam_eye_offset, "_warned", True)
         if args_cli.video:
             timestep += 1

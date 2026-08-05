@@ -361,7 +361,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # the default world-origin framing misses the robot entirely.
         env_cfg.viewer.cam_prim_path = "/Camera_Replay"
         env_cfg.viewer.eye = (3.0, -3.0, 1.8)
-        env_cfg.viewer.lookat = (0.0, 0.0, 0.9)
+        env_cfg.viewer.lookat = (0.0, 0.0, 0.3)
         env_cfg.viewer.resolution = (1920, 1080)
         print(
             f"[INFO] Viewer: cam_prim_path={env_cfg.viewer.cam_prim_path} "
@@ -379,8 +379,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         import omni.usd
         from pxr import UsdGeom, Gf
         _stage = omni.usd.get_context().get_stage()
-        _cam_prim = UsdGeom.Camera.Define(_stage, "/Camera_Replay").GetPrim()
-        print(f"[CAM] defined replay camera prim at /Camera_Replay (valid={bool(_cam_prim)})", flush=True)
+        _cam_usd = UsdGeom.Camera.Define(_stage, "/Camera_Replay")
+        # wide-angle lens so the whole robot fits in the frame (~47 deg HFOV);
+        # the default 50mm focal length only covered the upper body
+        _cam_usd.GetFocalLengthAttr().Set(24.0)
+        _cam_prim = _cam_usd.GetPrim()
+        print(f"[CAM] defined replay camera prim at /Camera_Replay (valid={bool(_cam_prim)}, focal=24mm)", flush=True)
 
     env.unwrapped.command_generator.command[:, 0] = 0.0
     env.unwrapped.command_generator.command[:, 1] = 0.0

@@ -478,7 +478,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 Gf.Vec3d(float(_eye0[0]), float(_eye0[1]), float(_eye0[2])),
                 Gf.Vec3d(float(_tgt0[0]), float(_tgt0[1]), float(_tgt0[2])),
                 Gf.Vec3d(0.0, 0.0, 1.0),
-            )
+            ).GetInverse()
             _xf0 = UsdGeom.Xformable(_cam_prim)
             _xf0.ClearXformOpOrder()
             _xf0.AddTransformOp().Set(_m0)
@@ -536,7 +536,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     Gf.Vec3d(float(_eye[0]), float(_eye[1]), float(_eye[2])),
                     Gf.Vec3d(float(_tgt[0]), float(_tgt[1]), float(_tgt[2])),
                     Gf.Vec3d(0.0, 0.0, 1.0),
-                )
+                ).GetInverse()
                 _xf = UsdGeom.Xformable(_cam_prim)
                 _xf.ClearXformOpOrder()
                 _xf.AddTransformOp().Set(_m)

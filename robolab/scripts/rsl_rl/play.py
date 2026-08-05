@@ -95,6 +95,7 @@ import gymnasium as gym
 import os
 import time
 import math
+import numpy as np
 import torch
 import copy
 
@@ -354,9 +355,22 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.log_dir = log_dir
 
     if args_cli.video:
-        # use a higher resolution for the replay video
+        # frame the recorded camera on the robot.
+        # note: the recorded camera is /OmniverseKit_Persp (ViewerCfg.cam_prim_path default).
+        # the default world-origin framing misses the robot because env 0 spawns off-origin
+        # inside the generated terrain grid (e.g. (8, -16)).
+        env_cfg.viewer.origin_type = "asset_root"
+        env_cfg.viewer.asset_name = "robot"
+        env_cfg.viewer.eye = (3.0, -3.0, 1.8)
+        env_cfg.viewer.lookat = (0.0, 0.0, 0.9)
         env_cfg.viewer.resolution = (1920, 1080)
-        print(f"[INFO] Viewer resolution set to {env_cfg.viewer.resolution} for video recording.", flush=True)
+        print(
+            f"[INFO] Viewer: origin_type=asset_root asset={env_cfg.viewer.asset_name} "
+            f"eye={env_cfg.viewer.eye} resolution={env_cfg.viewer.resolution}",
+            flush=True,
+        )
+        _cam_eye_offset = np.asarray(env_cfg.viewer.eye, dtype=float)
+        _cam_look_offset = np.asarray(env_cfg.viewer.lookat, dtype=float)
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
@@ -486,6 +500,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         except Exception as _e:
             print(f"[DIAG] step={diag_step} data unavailable: {_e}", flush=True)
         diag_step += 1
+        # keep the recorded camera framed on the robot (belt-and-suspenders with asset_root tracking)
+        if args_cli.video:
+            try:
+                _rpos = env.unwrapped.robot.data.root_pos_w[0].cpu().numpy()
+                env.unwrapped.sim.set_camera_view(
+                    eye=tuple(_rpos + _cam_eye_offset), target=tuple(_rpos + _cam_look_offset)
+                )
+            except Exception as _e:
+                if not getattr(_cam_eye_offset, "_warned", False):
+                    print(f"[CAM] manual camera reposition failed: {_e}", flush=True)
+                    setattr(_cam_eye_offset, "_warned", True)
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video

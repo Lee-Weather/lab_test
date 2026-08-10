@@ -556,11 +556,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             _rpos = _diag_env.robot.data.root_pos_w[0]
             _rquat = _diag_env.robot.data.root_quat_w[0]
             _w, _x, _y, _z = _rquat.tolist()
+            # full euler angles (roll-pitch-yaw) from quaternion, for pose checks
+            _roll = math.atan2(2.0 * (_w * _x + _y * _z), 1.0 - 2.0 * (_x * _x + _y * _y))
+            _pitch = math.asin(max(-1.0, min(1.0, 2.0 * (_w * _y - _z * _x))))
             _yaw = math.atan2(2.0 * (_w * _z + _x * _y), 1.0 - 2.0 * (_y * _y + _z * _z))
             _rlv = _diag_env.robot.data.root_lin_vel_w[0]
             _rav = _diag_env.robot.data.root_ang_vel_w[0]
             _cmd = _diag_env.command_generator.command[0]
-            _row = [diag_step, float(_rpos[0]), float(_rpos[1]), float(_rpos[2]), _yaw]
+            _row = [diag_step, float(_rpos[0]), float(_rpos[1]), float(_rpos[2]), _roll, _pitch, _yaw]
             # base velocities
             _row += [float(_rlv[0]), float(_rlv[1]), float(_rlv[2]), float(_rav[2])]
             # velocity commands
@@ -587,7 +590,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             diag_rows.append(_row)
             if diag_step % 10 == 0 or diag_step == 1:
                 print(
-                    f"[DIAG] step={diag_step} pos=({_rpos[0]:.3f},{_rpos[1]:.3f},{_rpos[2]:.3f}) yaw={_yaw:.3f}rad",
+                    f"[DIAG] step={diag_step} pos=({_rpos[0]:.3f},{_rpos[1]:.3f},{_rpos[2]:.3f}) "
+                    f"euler=({_roll*180/math.pi:.2f},{_pitch*180/math.pi:.2f},{_yaw*180/math.pi:.2f})deg",
                     flush=True,
                 )
         except Exception as _e:
@@ -631,7 +635,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             import io
             # build CSV header matching F1_one play.py format
             _header = [
-                "step", "x", "y", "z", "yaw",
+                "step", "x", "y", "z", "roll", "pitch", "yaw",
                 "base_vel_x", "base_vel_y", "base_vel_z", "base_vel_yaw",
                 "command_x", "command_y", "command_yaw",
                 "foot_z_l", "foot_z_r", "foot_forcez_l", "foot_forcez_r",

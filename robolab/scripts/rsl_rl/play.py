@@ -313,6 +313,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # UniformVelocityCommand.compute() re-samples the command every
     # resampling_time_range (10s default), overwriting the value set below.
     env_cfg.commands.resampling_time_range = (1.0e9, 1.0e9)
+    # Also pin the command sampling ranges to a single value each, so even
+    # if compute()/reset() resamples the command it always returns exactly
+    # the requested straight-line command (version-independent fix).
+    env_cfg.commands.ranges.lin_vel_x = (args_cli.cmd_vx, args_cli.cmd_vx)
+    env_cfg.commands.ranges.lin_vel_y = (args_cli.cmd_vy, args_cli.cmd_vy)
+    env_cfg.commands.ranges.ang_vel_z = (args_cli.cmd_wz, args_cli.cmd_wz)
 
     if args_cli.plane:
         env_cfg.scene.terrain.terrain_generator = None
@@ -536,15 +542,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 visualize_attention(height_scan, root_pose, output_attn, visualizer)
             else:
                 actions = policy(obs)
-            # force the commanded velocity every step so it can never be
-            # overwritten by command_generator.reset()/compute() resampling.
-            # (play must follow a fixed straight-line command for evaluation)
+            # force the commanded velocity every step as defense-in-depth:
+            # ranges are already pinned to a single value so any resampling
+            # returns the same straight-line command (see env_cfg setup).
             _cg = env.unwrapped.command_generator
             _cg.command[:] = 0.0
             _cg.command[:, 0] = args_cli.cmd_vx
             _cg.command[:, 1] = args_cli.cmd_vy
             _cg.command[:, 2] = args_cli.cmd_wz
-            _cg.command_expire_time[:] = float("inf")
             obs, _, _, _ = env.step(actions)
         # record numerical diagnostics (works without rendering)
         try:

@@ -480,6 +480,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     diag_step = 0
     diag_csv = os.path.join("/personal", "play_diag.csv")
 
+    # pre-fetch foot body indices and DOF count for detailed diagnostics
+    _diag_env = env.unwrapped
+    _foot_ids = None
+    _num_dof = 0
+    try:
+        if hasattr(_diag_env, "feet_cfg"):
+            _foot_ids = _diag_env.feet_cfg.body_ids
+        _num_dof = _diag_env.robot.num_joints
+    except Exception:
+        pass
+
     # reset environment
     obs = env.get_observations()
     timestep = 0
@@ -528,11 +539,38 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             obs, _, _, _ = env.step(actions)
         # record numerical diagnostics (works without rendering)
         try:
-            _rpos = env.unwrapped.robot.data.root_pos_w[0]
-            _rquat = env.unwrapped.robot.data.root_quat_w[0]
+            _rpos = _diag_env.robot.data.root_pos_w[0]
+            _rquat = _diag_env.robot.data.root_quat_w[0]
             _w, _x, _y, _z = _rquat.tolist()
             _yaw = math.atan2(2.0 * (_w * _z + _x * _y), 1.0 - 2.0 * (_y * _y + _z * _z))
-            diag_rows.append([diag_step, float(_rpos[0]), float(_rpos[1]), float(_rpos[2]), _yaw])
+            _rlv = _diag_env.robot.data.root_lin_vel_w[0]
+            _rav = _diag_env.robot.data.root_ang_vel_w[0]
+            _cmd = _diag_env.command_generator.command[0]
+            _row = [diag_step, float(_rpos[0]), float(_rpos[1]), float(_rpos[2]), _yaw]
+            # base velocities
+            _row += [float(_rlv[0]), float(_rlv[1]), float(_rlv[2]), float(_rav[2])]
+            # velocity commands
+            _row += [float(_cmd[0]), float(_cmd[1]), float(_cmd[2])]
+            # foot data
+            if _foot_ids is not None:
+                _body_pos = _diag_env.robot.data.body_pos_w[0]
+                _foot_z_l = float(_body_pos[_foot_ids[0], 2])
+                _foot_z_r = float(_body_pos[_foot_ids[1], 2])
+                _cf = _diag_env.contact_sensor.data.net_forces_w[0]
+                _foot_fz_l = float(_cf[_foot_ids[0], 2])
+                _foot_fz_r = float(_cf[_foot_ids[1], 2])
+            else:
+                _foot_z_l = _foot_z_r = _foot_fz_l = _foot_fz_r = 0.0
+            _row += [_foot_z_l, _foot_z_r, _foot_fz_l, _foot_fz_r]
+            # per-joint data
+            _dp = _diag_env.robot.data.joint_pos[0]
+            _dv = _diag_env.robot.data.joint_vel[0]
+            _dt_q = _diag_env.robot.data.applied_torque[0]
+            _row += [float(v) for v in _dp.tolist()]
+            _row += [float(v) for v in _dv.tolist()]
+            _row += [float(v) for v in _dt_q.tolist()]
+            _row += [float(v) for v in actions[0].tolist()]
+            diag_rows.append(_row)
             if diag_step % 10 == 0 or diag_step == 1:
                 print(
                     f"[DIAG] step={diag_step} pos=({_rpos[0]:.3f},{_rpos[1]:.3f},{_rpos[2]:.3f}) yaw={_yaw:.3f}rad",
@@ -577,15 +615,30 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         try:
             import csv
             import io
+            # build CSV header matching F1_one play.py format
+            _header = [
+                "step", "x", "y", "z", "yaw",
+                "base_vel_x", "base_vel_y", "base_vel_z", "base_vel_yaw",
+                "command_x", "command_y", "command_yaw",
+                "foot_z_l", "foot_z_r", "foot_forcez_l", "foot_forcez_r",
+            ]
+            for i in range(_num_dof):
+                _header.append(f"dof_pos[{i}]")
+            for i in range(_num_dof):
+                _header.append(f"dof_vel[{i}]")
+            for i in range(_num_dof):
+                _header.append(f"dof_torque[{i}]")
+            for i in range(_num_dof):
+                _header.append(f"action[{i}]")
             with open(diag_csv, "w", newline="") as _f:
                 _wr = csv.writer(_f)
-                _wr.writerow(["step", "x", "y", "z", "yaw"])
+                _wr.writerow(_header)
                 _wr.writerows(diag_rows)
-            print(f"[DIAG] CSV written to {diag_csv} ({len(diag_rows)} rows)", flush=True)
+            print(f"[DIAG] CSV written to {diag_csv} ({len(diag_rows)} rows, {len(_header)} cols)", flush=True)
             # Also dump full CSV to stdout so it can be recovered via task logs
             _buf = io.StringIO()
             _wr = csv.writer(_buf)
-            _wr.writerow(["step", "x", "y", "z", "yaw"])
+            _wr.writerow(_header)
             _wr.writerows(diag_rows)
             print("[DIAG] FULL_CSV_BEGIN", flush=True)
             print(_buf.getvalue(), end="", flush=True)

@@ -536,6 +536,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 visualize_attention(height_scan, root_pose, output_attn, visualizer)
             else:
                 actions = policy(obs)
+            # force the commanded velocity every step so it can never be
+            # overwritten by command_generator.reset()/compute() resampling.
+            # (play must follow a fixed straight-line command for evaluation)
+            _cg = env.unwrapped.command_generator
+            _cg.command[:] = 0.0
+            _cg.command[:, 0] = args_cli.cmd_vx
+            _cg.command[:, 1] = args_cli.cmd_vy
+            _cg.command[:, 2] = args_cli.cmd_wz
+            _cg.command_expire_time[:] = float("inf")
             obs, _, _, _ = env.step(actions)
         # record numerical diagnostics (works without rendering)
         try:

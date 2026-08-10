@@ -306,7 +306,7 @@ if __name__ == '__main__':
             mujoco_model_path = os.environ.get('X1_29_MJCF', os.path.join(X1_29_DATA_DIR, 'mjcf', 'mjmodel_x1_29dof_perfect_mirrored_sim_flat.xml'))
             sim_duration = 20.0
             dt = 0.005
-            decimation = 4
+            decimation = 2
             use_implicit = True  # mjINT_IMPLICIT + dof_damping for kd (best deployment config)
 
         class robot_config:

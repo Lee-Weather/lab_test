@@ -1250,7 +1250,7 @@ if __name__ == "__main__":
             mujoco_model_path = xml_path
             sim_duration = 1_000_000.0
             dt = 0.005
-            decimation = 4
+            decimation = 2
             depth_camera_body = "torso_link"
 
         class robot_config:

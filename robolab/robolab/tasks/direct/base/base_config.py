@@ -251,7 +251,7 @@ class EventCfg:
 @configclass
 class BaseEnvCfg(DirectRLEnvCfg):
     viewer: ViewerCfg = ViewerCfg()
-    decimation: int = 4
+    decimation: int = 2
     sim: SimulationCfg = SimulationCfg(
         dt=0.005, 
         render_interval=decimation, 

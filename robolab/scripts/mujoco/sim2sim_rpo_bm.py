@@ -298,7 +298,7 @@ if __name__ == '__main__':
                 mujoco_model_path = f'{ISAAC_DATA_DIR}/robots/roboparty/rpo/mjcf/rpo.xml'
             sim_duration = 1000.0
             dt = 0.005
-            decimation = 4
+            decimation = 2
 
         class robot_config:
             kps = np.array([100, 100, 100, 150, 40, 40, 100, 100, 100, 150, 40, 40, 150, 40, 40, 40, 30, 20, 40, 40, 40, 30, 20], dtype=np.double)

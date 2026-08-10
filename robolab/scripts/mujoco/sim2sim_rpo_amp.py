@@ -653,7 +653,7 @@ if __name__ == '__main__':
                 mujoco_model_path = f'{ISAAC_DATA_DIR}/robots/roboparty/rpo/mjcf/rpo.xml'
             sim_duration = 1000000.0
             dt = 0.005
-            decimation = 4
+            decimation = 2
             render_fps = 120.0
             busy_wait_margin = 0.0005
 

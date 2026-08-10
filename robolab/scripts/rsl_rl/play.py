@@ -490,10 +490,35 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     _diag_env = env.unwrapped
     _foot_ids = None
     _num_dof = 0
+    # upper-body rigid-body links to log (position + orientation each step)
+    _upper_body_names = [
+        "lumbar_yaw_link", "lumbar_roll_link", "lumbar_pitch_link",
+        "left_shoulder_pitch_link", "left_shoulder_roll_link", "left_shoulder_yaw_link",
+        "left_elbow_pitch_link", "left_elbow_yaw_link",
+        "left_wrist_pitch_link", "left_wrist_roll_link",
+        "right_shoulder_pitch_link", "right_shoulder_roll_link", "right_shoulder_yaw_link",
+        "right_elbow_pitch_link", "right_elbow_yaw_link",
+        "right_wrist_pitch_link", "right_wrist_roll_link",
+    ]
+    _upper_body_ids = []
     try:
         if hasattr(_diag_env, "feet_cfg"):
             _foot_ids = _diag_env.feet_cfg.body_ids
         _num_dof = _diag_env.robot.num_joints
+        # resolve link name -> body index via the articulation (best effort,
+        # missing links are skipped so the CSV stays consistent)
+        _upper_body_ids = []
+        _upper_body_names_resolved = []
+        _bnames_all = list(_diag_env.robot.body_names)
+        for _bname in _upper_body_names:
+            try:
+                _bid = _bnames_all.index(_bname)
+                _upper_body_ids.append(_bid)
+                _upper_body_names_resolved.append(_bname)
+            except ValueError:
+                pass
+        if _upper_body_ids:
+            _upper_body_names = _upper_body_names_resolved
     except Exception:
         pass
 
@@ -579,6 +604,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             else:
                 _foot_z_l = _foot_z_r = _foot_fz_l = _foot_fz_r = 0.0
             _row += [_foot_z_l, _foot_z_r, _foot_fz_l, _foot_fz_r]
+            # upper-body rigid-body pose (position + euler angles per link)
+            if _upper_body_ids:
+                _bpos = _diag_env.robot.data.body_pos_w[0]
+                _bquat = _diag_env.robot.data.body_quat_w[0]
+                for _bid in _upper_body_ids:
+                    _bp = _bpos[_bid]
+                    _bq = _bquat[_bid]
+                    _bw, _bx, _by, _bz = _bq.tolist()
+                    _br = math.atan2(2.0 * (_bw * _bx + _by * _bz), 1.0 - 2.0 * (_bx * _bx + _by * _by))
+                    _bpi = math.asin(max(-1.0, min(1.0, 2.0 * (_bw * _by - _bz * _bx))))
+                    _bya = math.atan2(2.0 * (_bw * _bz + _bx * _by), 1.0 - 2.0 * (_by * _by + _bz * _bz))
+                    _row += [float(_bp[0]), float(_bp[1]), float(_bp[2]), _br, _bpi, _bya]
             # per-joint data
             _dp = _diag_env.robot.data.joint_pos[0]
             _dv = _diag_env.robot.data.joint_vel[0]
@@ -640,6 +677,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 "command_x", "command_y", "command_yaw",
                 "foot_z_l", "foot_z_r", "foot_forcez_l", "foot_forcez_r",
             ]
+            # upper-body rigid-body columns: <link>_x/y/z/roll/pitch/yaw
+            for _bname in _upper_body_names:
+                for _suffix in ("x", "y", "z", "roll", "pitch", "yaw"):
+                    _header.append(f"{_bname}_{_suffix}")
             for i in range(_num_dof):
                 _header.append(f"dof_pos[{i}]")
             for i in range(_num_dof):
